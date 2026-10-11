@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Landing Page Prompt Studio</title>
+<meta name="description" content="Turn a product brief into a visual landing page preview and a copy-ready prompt for Claude.">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- Icon sprite: simple line icons, no external files -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7M5 10v10h5v-6h4v6h5V10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6h6l2 2h10v11H3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="16" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="8" cy="17" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-desktop" viewBox="0 0 24 24"><path d="M3 5h18v11H3zM9 20h6M12 16v4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><path d="M8 3h8v18H8zM11 18h2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</svg>
+
+<a class="skip-link" href="#main">Skip to main content</a>
+
+<div class="app">
+
+  <!-- ============ SIDEBAR / TOP NAV ============ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name">Prompt Studio<small>Landing pages</small></span>
+    </div>
+    <nav aria-label="Main navigation" class="nav">
+      <button type="button" class="nav-btn" data-nav="dashboard"><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg><span>Dashboard</span></button>
+      <button type="button" class="nav-btn" data-nav="gallery"><svg class="ic" aria-hidden="true"><use href="#i-grid"/></svg><span>Style Gallery</span></button>
+      <button type="button" class="nav-btn" data-nav="projects"><svg class="ic" aria-hidden="true"><use href="#i-folder"/></svg><span>My Projects</span></button>
+      <button type="button" class="nav-btn" data-nav="settings"><svg class="ic" aria-hidden="true"><use href="#i-gear"/></svg><span>Settings</span></button>
+    </nav>
+    <p class="sidebar-note">Projects are saved in this browser only.</p>
+  </aside>
+
+  <main id="main" tabindex="-1">
+
+    <div id="storage-warning" class="banner banner-warn" role="alert" hidden>
+      Browser storage is not available here, so projects cannot be saved. You can still use the studio, but your work will be lost when you close or reload this tab.
+    </div>
+
+    <!-- ============ DASHBOARD ============ -->
+    <section id="view-dashboard" class="view" aria-labelledby="h-dashboard" hidden>
+      <header class="page-head">
+        <div>
+          <p class="eyebrow">Welcome</p>
+          <h1 id="h-dashboard" tabindex="-1">Plan a landing page, then take the prompt to Claude.</h1>
+        </div>
+        <div class="page-actions"><button type="button" class="btn btn-primary" id="btn-new-dashboard">New Project</button></div>
+      </header>
+
+      <div class="two-col">
+        <div>
+          <h2 class="h2">Recent projects</h2>
+          <div id="dash-recent"></div>
+        </div>
+        <div>
+          <h2 class="h2">How it works</h2>
+          <ol class="flow">
+            <li><strong>Product brief</strong><span>Describe what you sell and who it is for.</span></li>
+            <li><strong>Design discovery</strong><span>Pick a style, use a reference, or get rule-based recommendations.</span></li>
+            <li><strong>Page planner</strong><span>Choose and order the sections.</span></li>
+            <li><strong>Visual preview</strong><span>Check a mockup built from your own data.</span></li>
+            <li><strong>Prompt workspace</strong><span>Edit and copy a prompt for Lynk.id or a standard website.</span></li>
+          </ol>
+          <p class="muted small">No AI is called inside this app. Recommendations and prompts come from fixed templates and rules applied to what you enter.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ STYLE GALLERY ============ -->
+    <section id="view-gallery" class="view" aria-labelledby="h-gallery" hidden>
+      <div id="gallery-list">
+        <header class="page-head">
+          <div>
+            <p class="eyebrow">Style Gallery</p>
+            <h1 id="h-gallery" tabindex="-1">Eight visual directions</h1>
+          </div>
+        </header>
+        <div class="filters">
+          <div class="field">
+            <label for="gallery-search">Search styles</label>
+            <input type="search" id="gallery-search" placeholder="Name, mood or category">
+          </div>
+          <div class="field">
+            <label for="gallery-category">Suitable for</label>
+            <select id="gallery-category"></select>
+          </div>
+        </div>
+        <p id="gallery-count" class="muted small" aria-live="polite"></p>
+        <div id="gallery-grid" class="style-grid"></div>
+        <div id="gallery-empty" class="empty" hidden>
+          <p><strong>No styles match.</strong></p>
+          <p class="muted">Try a different word or reset the category filter.</p>
+        </div>
+      </div>
+
+      <div id="gallery-detail" hidden>
+        <p><button type="button" class="btn btn-quiet" id="gallery-back">Back to gallery</button></p>
+        <header class="page-head">
+          <div>
+            <p class="eyebrow">Style detail</p>
+            <h1 id="detail-title" tabindex="-1"></h1>
+            <p id="detail-desc" class="lead"></p>
+          </div>
+          <div class="page-actions"><button type="button" class="btn btn-primary" id="detail-apply"></button></div>
+        </header>
+        <div class="detail-preview" id="detail-preview"></div>
+        <p class="muted small">Mockup with sample structure only. No real product, prices or reviews are implied.</p>
+        <dl class="spec" id="detail-spec"></dl>
+      </div>
+    </section>
+
+    <!-- ============ MY PROJECTS ============ -->
+    <section id="view-projects" class="view" aria-labelledby="h-projects" hidden>
+      <header class="page-head">
+        <div>
+          <p class="eyebrow">My Projects</p>
+          <h1 id="h-projects" tabindex="-1">Saved in this browser</h1>
+        </div>
+        <div class="page-actions"><button type="button" class="btn btn-primary" id="btn-new-projects">New Project</button></div>
+      </header>
+      <div id="projects-list"></div>
+      <p class="muted small">Clearing your browser data can remove these projects. Copy important prompts somewhere safe.</p>
+    </section>
+
+    <!-- ============ SETTINGS ============ -->
+    <section id="view-settings" class="view" aria-labelledby="h-settings" hidden>
+      <header class="page-head">
+        <div>
+          <p class="eyebrow">Settings</p>
+          <h1 id="h-settings" tabindex="-1">Defaults for new projects</h1>
+        </div>
+      </header>
+      <div class="form-narrow">
+        <div class="field">
+          <label for="set-platform">Default platform</label>
+          <select id="set-platform">
+            <option value="lynk">Lynk.id</option>
+            <option value="standard">Standard Website</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="set-language">Default language for the landing page copy</label>
+          <select id="set-language">
+            <option value="id">Indonesian</option>
+            <option value="en">English</option>
+          </select>
+        </div>
+        <p class="muted small">Changes apply to new projects only. Existing projects keep their own choices.</p>
+        <hr>
+        <h2 class="h2">Local data</h2>
+        <p>Projects, your uploaded reference images (when small enough) and these settings are stored in this browser using LocalStorage. Nothing is sent to a server. Clearing site data, using a private window or switching browsers can remove or hide your projects.</p>
+        <p><button type="button" class="btn btn-danger" id="btn-clear">Clear all local project data</button></p>
+      </div>
+    </section>
+
+    <!-- ============ STUDIO (WIZARD) ============ -->
+    <section id="view-studio" class="view" aria-labelledby="h-studio" hidden>
+      <header class="page-head">
+        <div>
+          <p class="eyebrow">Prompt Studio</p>
+          <h1 id="h-studio" tabindex="-1">New project</h1>
+          <p class="muted small" id="save-status" aria-live="polite"></p>
+        </div>
+      </header>
+
+      <nav aria-label="Project steps"><ol class="progress" id="progress"></ol></nav>
+
+      <div id="error-summary" class="banner banner-error" role="alert" tabindex="-1" hidden></div>
+
+      <!-- STEP 1 -->
+      <div class="step" id="step-1" data-step="1" hidden>
+        <h2 class="h2" id="h-step-1" tabindex="-1">1. Product brief</h2>
+        <p class="muted">Tell the studio what you are promoting. Optional fields can stay empty; the generated prompt will tell Claude not to invent them.</p>
+        <div class="form-grid">
+          <div class="field">
+            <label for="f-name">Project name <span class="req">Required</span></label>
+            <input id="f-name" data-bind="name" type="text" autocomplete="off" placeholder="e.g. Ebook launch page">
+            <p class="field-error" id="e-name" hidden></p>
+          </div>
+          <div class="field">
+            <label for="f-brief-productName">Product or business name <span class="req">Required</span></label>
+            <input id="f-brief-productName" data-bind="brief.productName" type="text" autocomplete="off">
+            <p class="field-error" id="e-brief-productName" hidden></p>
+          </div>
+          <div class="field">
+            <label for="f-brief-category">Product category</label>
+            <select id="f-brief-category" data-bind="brief.category"></select>
+          </div>
+          <div class="field">
+            <label for="f-brief-goal">Landing page goal <span class="req">Required</span></label>
+            <select id="f-brief-goal" data-bind="brief.goal"></select>
+            <p class="field-error" id="e-brief-goal" hidden></p>
+          </div>
+          <div class="field" data-show-if="brief.goal=other">
+            <label for="f-brief-goalOther">Describe your goal</label>
+            <input id="f-brief-goalOther" data-bind="brief.goalOther" type="text" autocomplete="off">
+          </div>
+          <div class="field full">
+            <label for="f-brief-description">Short product description <span class="req">Required</span></label>
+            <textarea id="f-brief-description" data-bind="brief.description" rows="3" placeholder="What is it, in one or two sentences?"></textarea>
+            <p class="field-error" id="e-brief-description" hidden></p>
+          </div>
+          <div class="field full">
+            <label for="f-brief-audience">Target audience <span class="req">Required</span></label>
+            <input id="f-brief-audience" data-bind="brief.audience" type="text" autocomplete="off" placeholder="e.g. Stay-at-home moms starting a small online business">
+            <p class="field-error" id="e-brief-audience" hidden></p>
+          </div>
+          <div class="field full">
+            <label for="f-brief-problem">Main customer problem</label>
+            <textarea id="f-brief-problem" data-bind="brief.problem" rows="3"></textarea>
+          </div>
+          <div class="field full">
+            <label for="f-brief-benefit">Main benefit or desired outcome</label>
+            <textarea id="f-brief-benefit" data-bind="brief.benefit" rows="3"></textarea>
+            <p class="hint">Tip: put one benefit per line to see each one in the preview.</p>
+          </div>
+          <div class="field">
+            <label for="f-brief-platform">Platform <span class="req">Required</span></label>
+            <select id="f-brief-platform" data-bind="brief.platform">
+              <option value="lynk">Lynk.id</option>
+              <option value="standard">Standard Website</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="f-brief-language">Language of the page copy</label>
+            <select id="f-brief-language" data-bind="brief.language">
+              <option value="id">Indonesian</option>
+              <option value="en">English</option>
+            </select>
+          </div>
+          <div class="field" data-show-if="brief.platform=lynk">
+            <label for="f-brief-lynkPageType">Lynk.id page type</label>
+            <select id="f-brief-lynkPageType" data-bind="brief.lynkPageType">
+              <option value="product">Digital product page (max width about 500px)</option>
+              <option value="home">Lynk.id home page (max width about 800px)</option>
+            </select>
+          </div>
+          <div class="field" data-show-if="brief.platform=standard">
+            <label for="f-brief-outputFormat">Output format</label>
+            <select id="f-brief-outputFormat" data-bind="brief.outputFormat">
+              <option value="multi">Separate files (index.html and styles.css)</option>
+              <option value="single">Single-file HTML (CSS inside the file)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 2 -->
+      <div class="step" id="step-2" data-step="2" hidden>
+        <h2 class="h2" id="h-step-2" tabindex="-1">2. Design discovery</h2>
+        <fieldset class="mode-switch">
+          <legend>How do you want to set the visual direction?</legend>
+          <label class="mode-opt"><input type="radio" name="designMode" value="style"><span><strong>Choose a style</strong><small>Pick one preset from the gallery.</small></span></label>
+          <label class="mode-opt"><input type="radio" name="designMode" value="reference"><span><strong>Use a reference</strong><small>Add a URL or screenshot you like.</small></span></label>
+          <label class="mode-opt"><input type="radio" name="designMode" value="recommend"><span><strong>Recommend for me</strong><small>Answer four questions. Rules pick the styles.</small></span></label>
+        </fieldset>
+        <p class="field-error" id="e-design-mode" hidden></p>
+
+        <div id="mode-style" class="mode-panel">
+          <p class="muted">Select one primary style. You can change it any time.</p>
+          <p id="style-selected" class="selected-line" aria-live="polite"></p>
+          <div id="style-picker" class="style-grid"></div>
+          <p class="field-error" id="e-design-styleId" hidden></p>
+        </div>
+
+        <div id="mode-reference" class="mode-panel" hidden>
+          <p class="muted">A reference is visual guidance only. It is not permission to copy another brand's logo, text, photos or code.</p>
+          <div class="form-grid">
+            <div class="field full">
+              <label for="ref-file">Reference screenshot (optional)</label>
+              <input type="file" id="ref-file" accept="image/png,image/jpeg,image/webp,image/gif">
+              <p class="hint">The image stays in your browser. It is not uploaded anywhere. When you use the prompt in Claude, attach the screenshot to that chat yourself.</p>
+              <div id="ref-preview-wrap" class="ref-preview" hidden>
+                <img id="ref-preview" alt="Preview of your uploaded reference screenshot">
+                <div><p id="ref-meta" class="small muted"></p><button type="button" class="btn btn-quiet" id="ref-remove">Remove image</button></div>
+              </div>
+              <p class="field-error" id="e-ref-file" hidden></p>
+            </div>
+            <div class="field full">
+              <label for="f-design-referenceUrl">Reference URL (optional)</label>
+              <input id="f-design-referenceUrl" data-bind="design.referenceUrl" type="url" inputmode="url" placeholder="https://">
+              <p class="field-error" id="e-design-referenceUrl" hidden></p>
+            </div>
+            <div class="field full">
+              <label for="f-design-referenceNotes">What do you like about this reference?</label>
+              <textarea id="f-design-referenceNotes" data-bind="design.referenceNotes" rows="3" placeholder="Colors, typography, spacing, photography, mood..."></textarea>
+              <p class="field-error" id="e-design-referenceNotes" hidden></p>
+            </div>
+            <div class="field full">
+              <label for="f-design-baseStyleId">Closest preset for the mockup</label>
+              <select id="f-design-baseStyleId" data-bind="design.baseStyleId"></select>
+              <p class="hint">The studio cannot read your reference. The mockup uses this preset, and your reference notes go into the prompt.</p>
+            </div>
+          </div>
+        </div>
+
+        <div id="mode-recommend" class="mode-panel" hidden>
+          <p class="muted">Four questions, then a fixed set of rules scores the eight presets. This is simple matching, not AI analysis.</p>
+          <div class="form-grid">
+            <div class="field"><label for="f-design-recommend-personality">Brand personality</label><select id="f-design-recommend-personality" data-bind="design.recommend.personality"></select></div>
+            <div class="field"><label for="f-design-recommend-emotion">Desired emotional impression</label><select id="f-design-recommend-emotion" data-bind="design.recommend.emotion"></select></div>
+            <div class="field"><label for="f-design-recommend-price">Price positioning</label><select id="f-design-recommend-price" data-bind="design.recommend.price"></select></div>
+            <div class="field"><label for="f-design-recommend-audience">Audience type</label><select id="f-design-recommend-audience" data-bind="design.recommend.audience"></select></div>
+          </div>
+          <p><button type="button" class="btn" id="btn-recommend">Show recommendations</button></p>
+          <p class="field-error" id="e-design-recommend" hidden></p>
+          <div id="rec-results" aria-live="polite"></div>
+        </div>
+      </div>
+
+      <!-- STEP 3 -->
+      <div class="step" id="step-3" data-step="3" hidden>
+        <h2 class="h2" id="h-step-3" tabindex="-1">3. Content and offer</h2>
+        <p class="muted">Leave unknown values empty. Nothing is invented for you: empty prices, proof and claims stay empty in the preview and in the prompt.</p>
+        <div class="form-grid">
+          <div class="field full">
+            <label for="f-content-headline">Headline idea</label>
+            <input id="f-content-headline" data-bind="content.headline" type="text" autocomplete="off">
+            <p class="hint">If empty, the preview shows a draft headline built from your description and benefit.</p>
+          </div>
+          <div class="field">
+            <label for="f-content-regularPrice">Regular price</label>
+            <input id="f-content-regularPrice" data-bind="content.regularPrice" type="text" autocomplete="off" placeholder="e.g. Rp199.000">
+          </div>
+          <div class="field">
+            <label for="f-content-promoPrice">Promotional price</label>
+            <input id="f-content-promoPrice" data-bind="content.promoPrice" type="text" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="f-content-ctaLabel">Main CTA label</label>
+            <input id="f-content-ctaLabel" data-bind="content.ctaLabel" type="text" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="f-content-ctaUrl">CTA destination URL</label>
+            <input id="f-content-ctaUrl" data-bind="content.ctaUrl" type="url" inputmode="url" placeholder="https://">
+            <p class="field-error" id="e-content-ctaUrl" hidden></p>
+          </div>
+          <div class="field">
+            <label for="f-content-colors">Brand colors</label>
+            <input id="f-content-colors" data-bind="content.colors" type="text" autocomplete="off" placeholder="#1F6F78, #F4E9D8">
+            <p class="hint">Hex codes are applied to the mockup. First = main accent, second = supporting accent.</p>
+          </div>
+          <div class="field">
+            <label for="f-content-productImageUrl">Product image URL</label>
+            <input id="f-content-productImageUrl" data-bind="content.productImageUrl" type="url" inputmode="url" placeholder="https://">
+            <p class="field-error" id="e-content-productImageUrl" hidden></p>
+          </div>
+          <div class="field full">
+            <label for="f-content-brandNotes">Brand notes</label>
+            <textarea id="f-content-brandNotes" data-bind="content.brandNotes" rows="2" placeholder="Fonts, mood words, things to keep or avoid"></textarea>
+          </div>
+          <div class="field full">
+            <label for="f-content-socialProof">Real social proof you can share</label>
+            <textarea id="f-content-socialProof" data-bind="content.socialProof" rows="3" placeholder="Only genuine testimonials, numbers or credentials"></textarea>
+            <p class="hint">If empty, the prompt tells Claude to skip testimonials and numbers.</p>
+          </div>
+          <div class="field">
+            <label for="f-content-tone">Tone of voice</label>
+            <select id="f-content-tone" data-bind="content.tone">
+              <option value="auto">Match the audience</option>
+              <option value="casual">Casual and warm</option>
+              <option value="formal">Formal and professional</option>
+            </select>
+          </div>
+          <fieldset class="field full formula-set">
+            <legend>Copywriting formula</legend>
+            <p class="hint">Pick up to three, or leave on Automatic. Claude blends them instead of printing the labels on the page.</p>
+            <div id="formula-list" class="formula-list"></div>
+            <p class="field-error" id="e-content-formulas" hidden></p>
+          </fieldset>
+          <div class="field full">
+            <label for="f-content-notes">Additional notes</label>
+            <textarea id="f-content-notes" data-bind="content.notes" rows="3" placeholder="Included items, bonuses, FAQ topics, anything else Claude should know"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 4 -->
+      <div class="step" id="step-4" data-step="4" hidden>
+        <h2 class="h2" id="h-step-4" tabindex="-1">4. Page planner</h2>
+        <p class="muted">Switch sections on or off and change their order. Not every page needs every section.</p>
+        <p><button type="button" class="btn" id="btn-restore-sections">Restore recommended structure</button> <span id="sections-count" class="muted small" aria-live="polite"></span></p>
+        <p class="field-error" id="e-sections" hidden></p>
+        <ol id="section-list" class="section-list"></ol>
+      </div>
+
+      <!-- STEP 5 -->
+      <div class="step" id="step-5" data-step="5" hidden>
+        <h2 class="h2" id="h-step-5" tabindex="-1">5. Review and preview</h2>
+        <dl class="summary" id="summary"></dl>
+        <div class="split-lists">
+          <div><h3 class="h3">Available assets</h3><ul id="assets-list" class="plain-list"></ul></div>
+          <div><h3 class="h3">Missing optional information</h3><ul id="missing-list" class="plain-list"></ul></div>
+        </div>
+        <div class="btn-row">
+          <button type="button" class="btn btn-quiet" data-goto="1">Edit Brief</button>
+          <button type="button" class="btn btn-quiet" data-goto="2">Edit Design</button>
+          <button type="button" class="btn btn-quiet" data-goto="4">Edit Sections</button>
+          <button type="button" class="btn btn-primary" id="btn-gen-preview">Generate Preview</button>
+        </div>
+
+        <div id="preview-block" hidden>
+          <div class="preview-toolbar">
+            <div class="seg" role="group" aria-label="Preview size">
+              <button type="button" class="seg-btn" data-vp="desktop" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="#i-desktop"/></svg>Desktop</button>
+              <button type="button" class="seg-btn" data-vp="mobile" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-phone"/></svg>Mobile</button>
+            </div>
+            <p class="small muted">Visual mockup built from your brief. It is not the final production code; Claude writes that from the prompt.</p>
+          </div>
+          <p id="preview-notes" class="small muted"></p>
+          <div class="pv-frame" id="preview-frame" data-vp="desktop"></div>
+        </div>
+      </div>
+
+      <!-- STEP 6 -->
+      <div class="step" id="step-6" data-step="6" hidden>
+        <h2 class="h2" id="h-step-6" tabindex="-1">6. Prompt workspace</h2>
+        <p class="muted">Built from your current project data. Edit anything, then copy it into Claude.</p>
+        <div id="prompt-notice" class="banner banner-info" role="status" hidden></div>
+        <div class="field">
+          <label for="prompt-text">Generated prompt</label>
+          <textarea id="prompt-text" rows="22" spellcheck="false" class="prompt-area"></textarea>
+          <p id="prompt-stats" class="small muted"></p>
+        </div>
+        <div class="btn-row">
+          <button type="button" class="btn btn-primary" id="btn-copy">Copy Prompt</button>
+          <button type="button" class="btn" id="btn-regen">Regenerate Prompt</button>
+          <button type="button" class="btn" id="btn-edit-prompt">Edit Prompt</button>
+        </div>
+        <p id="copy-status" class="status" role="status" aria-live="polite"></p>
+        <p id="attach-note" class="small muted" hidden></p>
+        <div class="btn-row">
+          <button type="button" class="btn btn-quiet" data-goto="5">Back to Preview</button>
+          <button type="button" class="btn btn-quiet" data-goto="1">Back to Project</button>
+          <button type="button" class="btn btn-quiet" id="btn-new-from-6">Start New Project</button>
+        </div>
+      </div>
+
+      <div class="step-footer" id="step-footer">
+        <button type="button" class="btn" id="btn-back">Back</button>
+        <button type="button" class="btn btn-primary" id="btn-next">Next</button>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<dialog id="dlg" aria-labelledby="dlg-title">
+  <form method="dialog" id="dlg-form">
+    <h2 id="dlg-title" class="h2"></h2>
+    <p id="dlg-msg"></p>
+    <div id="dlg-field" class="field" hidden>
+      <label for="dlg-input" id="dlg-label"></label>
+      <input id="dlg-input" type="text" autocomplete="off">
+    </div>
+    <div class="btn-row">
+      <button type="submit" value="cancel" class="btn" id="dlg-cancel" formnovalidate>Cancel</button>
+      <button type="submit" value="ok" class="btn btn-primary" id="dlg-ok">OK</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>
