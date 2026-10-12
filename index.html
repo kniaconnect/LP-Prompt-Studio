@@ -29,8 +29,9 @@
   <!-- ============ SIDEBAR / TOP NAV ============ -->
   <aside class="sidebar">
     <div class="brand">
-      <span class="brand-mark" aria-hidden="true"></span>
-      <span class="brand-name">Prompt Studio<small>Landing pages</small></span>
+      <img class="brand-logo" id="brand-logo" src="https://cdn.lynkid.my.id/profile/29-05-2025/1748501538357_2411391.webp?width=180&amp;quality=90" alt="KniaConnect" height="40" decoding="async" referrerpolicy="no-referrer">
+      <span class="brand-mark" id="brand-mark" aria-hidden="true" hidden></span>
+      <span class="brand-name">Prompt Studio<small>Landing page prompts</small></span>
     </div>
     <nav aria-label="Main navigation" class="nav">
       <button type="button" class="nav-btn" data-nav="dashboard"><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg><span>Dashboard</span></button>
@@ -82,7 +83,11 @@
         <header class="page-head">
           <div>
             <p class="eyebrow">Style Gallery</p>
-            <h1 id="h-gallery" tabindex="-1">Eight visual directions</h1>
+            <h1 id="h-gallery" tabindex="-1">Visual directions</h1>
+          </div>
+          <div class="page-actions">
+            <button type="button" class="btn" id="btn-style-import">Import style</button>
+            <button type="button" class="btn btn-primary" id="btn-style-new">Create your own style</button>
           </div>
         </header>
         <div class="filters">
@@ -115,7 +120,45 @@
         </header>
         <div class="detail-preview" id="detail-preview"></div>
         <p class="muted small">Mockup with sample structure only. No real product, prices or reviews are implied.</p>
+        <div id="detail-custom" class="btn-row" hidden>
+          <button type="button" class="btn" id="detail-edit">Edit this style</button>
+          <button type="button" class="btn" id="detail-export">Download as .json</button>
+          <button type="button" class="btn btn-danger" id="detail-delete">Delete this style</button>
+        </div>
         <dl class="spec" id="detail-spec"></dl>
+      </div>
+
+      <div id="gallery-edit" hidden>
+        <p><button type="button" class="btn btn-quiet" id="se-back">Back to gallery</button></p>
+        <header class="page-head"><div><p class="eyebrow">My style</p><h1 id="se-title" tabindex="-1">Create your own style</h1>
+          <p class="lead">Pick colors, fonts and a few layout choices. The mockup on the right updates as you go.</p></div></header>
+        <div class="edit-grid">
+          <form id="se-form" novalidate></form>
+          <div class="se-side">
+            <p class="h3">Live mockup</p>
+            <div class="pv-frame" id="se-preview" data-vp="desktop"></div>
+            <p class="muted small">Custom styles use the shared mockup layout with your colors, fonts, corners and spacing. The full text guidance still goes into the prompt.</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="gallery-import" hidden>
+        <p><button type="button" class="btn btn-quiet" id="imp-back">Back to gallery</button></p>
+        <header class="page-head"><div><p class="eyebrow">Import</p><h1 id="imp-title" tabindex="-1">Import a style</h1>
+          <p class="lead">Bring a style from a reference you like. Claude can turn a screenshot or description into the file this app understands.</p></div></header>
+        <div class="form-narrow import-steps">
+          <h2 class="h2">1. Get the style from Claude</h2>
+          <p class="muted">Copy this prompt into Claude, attach your screenshot or describe the look, and copy Claude's JSON answer.</p>
+          <textarea id="maker-text" rows="8" readonly spellcheck="false" class="prompt-area" aria-label="Style maker prompt"></textarea>
+          <div class="btn-row"><button type="button" class="btn" id="btn-maker-copy">Copy style-maker prompt</button></div>
+          <p id="maker-status" class="status" role="status" aria-live="polite"></p>
+          <h2 class="h2">2. Import it here</h2>
+          <div class="field"><label for="imp-file">Upload a .json style file</label><input type="file" id="imp-file" accept=".json,application/json"></div>
+          <div class="field"><label for="imp-text">Or paste the JSON</label><textarea id="imp-text" rows="8" spellcheck="false" class="prompt-area"></textarea></div>
+          <div id="imp-error" class="banner banner-error" role="alert" hidden></div>
+          <div class="btn-row"><button type="button" class="btn btn-primary" id="btn-imp-go">Import style</button></div>
+          <p class="muted small">Files are checked before they are saved: colors must be valid hex codes, fonts and layout options must come from the allowed lists, and text is shown as plain text only.</p>
+        </div>
       </div>
     </section>
 
@@ -158,7 +201,7 @@
         <p class="muted small">Changes apply to new projects only. Existing projects keep their own choices.</p>
         <hr>
         <h2 class="h2">Local data</h2>
-        <p>Projects, your uploaded reference images (when small enough) and these settings are stored in this browser using LocalStorage. Nothing is sent to a server. Clearing site data, using a private window or switching browsers can remove or hide your projects.</p>
+        <p>Projects, your custom styles, your uploaded reference images (when small enough) and these settings are stored in this browser using LocalStorage. Nothing is sent to a server. Clearing site data, using a private window or switching browsers can remove or hide your projects.</p>
         <p><button type="button" class="btn btn-danger" id="btn-clear">Clear all local project data</button></p>
       </div>
     </section>
@@ -268,6 +311,10 @@
 
         <div id="mode-style" class="mode-panel">
           <p class="muted">Select one primary style. You can change it any time.</p>
+          <div class="filters">
+            <div class="field"><label for="picker-search">Search styles</label><input type="search" id="picker-search" placeholder="Name, mood or category"></div>
+            <div class="field"><span class="lbl">Your own style</span><button type="button" class="btn" id="picker-new">Create or import a style</button></div>
+          </div>
           <p id="style-selected" class="selected-line" aria-live="polite"></p>
           <div id="style-picker" class="style-grid"></div>
           <p class="field-error" id="e-design-styleId" hidden></p>
@@ -345,24 +392,24 @@
             <input id="f-content-ctaUrl" data-bind="content.ctaUrl" type="url" inputmode="url" placeholder="https://">
             <p class="field-error" id="e-content-ctaUrl" hidden></p>
           </div>
-          <div class="field">
-            <label for="f-content-colors">Brand colors</label>
-            <input id="f-content-colors" data-bind="content.colors" type="text" autocomplete="off" placeholder="#1F6F78, #F4E9D8">
-            <p class="hint">Hex codes are applied to the mockup. First = main accent, second = supporting accent.</p>
-          </div>
-          <div class="field">
-            <label for="f-content-productImageUrl">Product image URL</label>
-            <input id="f-content-productImageUrl" data-bind="content.productImageUrl" type="url" inputmode="url" placeholder="https://">
-            <p class="field-error" id="e-content-productImageUrl" hidden></p>
-          </div>
+          <fieldset class="field full plain-set" id="brand-set">
+            <legend>Brand colors</legend>
+            <p class="hint">Type color names (for example "biru muda, orange, putih") or hex codes, and/or pick colors below. The preview and the prompt use your colors instead of the style's default colors.</p>
+            <div class="field">
+              <label for="f-content-colors">Color names or hex codes</label>
+              <input id="f-content-colors" data-bind="content.colors" type="text" autocomplete="off" placeholder="biru muda, orange, putih  /  #5BC0EB, #F97316">
+            </div>
+            <div id="brand-pickers" class="brand-pickers"></div>
+            <div id="brand-resolved" class="brand-resolved" aria-live="polite"></div>
+          </fieldset>
           <div class="field full">
             <label for="f-content-brandNotes">Brand notes</label>
             <textarea id="f-content-brandNotes" data-bind="content.brandNotes" rows="2" placeholder="Fonts, mood words, things to keep or avoid"></textarea>
           </div>
           <div class="field full">
-            <label for="f-content-socialProof">Real social proof you can share</label>
-            <textarea id="f-content-socialProof" data-bind="content.socialProof" rows="3" placeholder="Only genuine testimonials, numbers or credentials"></textarea>
-            <p class="hint">If empty, the prompt tells Claude to skip testimonials and numbers.</p>
+            <label for="f-content-socialProof">Other real proof (text only)</label>
+            <textarea id="f-content-socialProof" data-bind="content.socialProof" rows="3" placeholder="Only genuine credentials, mentions or results you can prove"></textarea>
+            <p class="hint">Add testimonials with names and photos in the Images block above. If you add no proof at all, the prompt tells Claude to skip testimonials and numbers.</p>
           </div>
           <div class="field">
             <label for="f-content-tone">Tone of voice</label>
@@ -377,6 +424,46 @@
             <p class="hint">Pick up to three, or leave on Automatic. Claude blends them instead of printing the labels on the page.</p>
             <div id="formula-list" class="formula-list"></div>
             <p class="field-error" id="e-content-formulas" hidden></p>
+          </fieldset>
+          <fieldset class="field full plain-set" id="img-set">
+            <legend>Images</legend>
+            <p class="hint">Use direct links to images that are already online (for example uploaded to Lynk.id, Canva, Imgur or your own site). The prompt carries the links, not the files. Links must be public and start with https://.</p>
+            <div class="form-grid inner-grid">
+              <div class="field">
+                <label for="f-content-logoUrl">Logo URL</label>
+                <input id="f-content-logoUrl" data-bind="content.logoUrl" type="url" inputmode="url" placeholder="https://">
+                <p class="field-error" id="e-content-logoUrl" hidden></p>
+              </div>
+              <div class="field">
+                <label for="f-content-productImageUrl">Main product image URL</label>
+                <input id="f-content-productImageUrl" data-bind="content.productImageUrl" type="url" inputmode="url" placeholder="https://">
+                <p class="field-error" id="e-content-productImageUrl" hidden></p>
+              </div>
+            </div>
+            <h3 class="h3">Testimonials</h3>
+            <p class="hint">Real customer words only. Add a photo link or a screenshot of the original message if you have one.</p>
+            <div id="tm-list" class="rep-list"></div>
+            <p><button type="button" class="btn btn-small" id="tm-add">Add testimonial</button></p>
+            <h3 class="h3">More images</h3>
+            <p class="hint">Product mockups, bonus images, real before/after results, your photo, or real certificates. Each image says where it belongs.</p>
+            <div id="gal-list" class="rep-list"></div>
+            <p><button type="button" class="btn btn-small" id="gal-add">Add image</button></p>
+          </fieldset>
+          <fieldset class="field full plain-set" id="stat-set">
+            <legend>Real numbers</legend>
+            <p class="hint">For counters and progress bars. Only true, current figures (for example "Modules: 11" or "Seats filled: 40%"). Nothing is invented, and you must update them yourself later.</p>
+            <div id="stat-list" class="rep-list"></div>
+            <p><button type="button" class="btn btn-small" id="stat-add">Add number</button></p>
+          </fieldset>
+          <fieldset class="field full plain-set" id="fx-set">
+            <legend>Page features and effects</legend>
+            <p class="hint">Choose what the page should do. Each feature shows whether it works on the platform you picked. Lynk.id only allows inline CSS, so some effects are simplified or left out.</p>
+            <div id="feature-list" class="formula-list"></div>
+            <div id="feature-warn" class="banner banner-info" role="status" hidden></div>
+            <div class="field" id="popup-field" hidden>
+              <label for="f-content-popupText">Pop-up content</label>
+              <textarea id="f-content-popupText" data-bind="content.popupText" rows="2" placeholder="What should the pop-up say? Leave empty to use the offer summary and CTA only."></textarea>
+            </div>
           </fieldset>
           <div class="field full">
             <label for="f-content-notes">Additional notes</label>
@@ -415,6 +502,7 @@
               <button type="button" class="seg-btn" data-vp="desktop" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="#i-desktop"/></svg>Desktop</button>
               <button type="button" class="seg-btn" data-vp="mobile" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-phone"/></svg>Mobile</button>
             </div>
+            <button type="button" class="btn btn-small" id="btn-pv-popup" hidden>Preview pop-up</button>
             <p class="small muted">Visual mockup built from your brief. It is not the final production code; Claude writes that from the prompt.</p>
           </div>
           <p id="preview-notes" class="small muted"></p>
@@ -456,6 +544,12 @@
 </div>
 
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<dialog id="dlg-popup" class="dlg-popup" aria-label="Pop-up preview">
+  <div id="popup-mock"></div>
+  <p class="small muted">Mockup of the pop-up. It opens only when a visitor taps a button, never on page load.</p>
+  <form method="dialog"><button type="submit" class="btn btn-small" id="popup-close">Close preview</button></form>
+</dialog>
 
 <dialog id="dlg" aria-labelledby="dlg-title">
   <form method="dialog" id="dlg-form">
