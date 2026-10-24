@@ -9,6 +9,7 @@
    4. Recommendation  – transparent rule-based style scoring
    5. Preview         – builds the visual mockup from project data
    6. Prompt          – builds the final prompt text from project data
+   6b. Gemini         – optional: user's own Google AI Studio key, sends the prompt
    7. UI              – views, wizard, forms, dialogs
    8. Init
    ===================================================================== */
@@ -65,8 +66,6 @@ const SECTION_DEFS = [
     hint: 'List what the buyer receives using only items named in the brief or notes. If unknown, keep it general and mark it clearly as [to be confirmed].' },
   { id: 'proof',    name: 'Social Proof',      desc: 'Real testimonials, credentials or other evidence.',
     hint: 'Use only the real proof supplied in this brief. If none is supplied, omit this section or use truthful trust elements such as process, contents or supplied credentials.' },
-  { id: 'numbers',  name: 'Numbers',           desc: 'Real figures shown as counters or progress bars.',
-    hint: 'Show only the figures listed under "Real numbers" in this brief, exactly as given. If none are listed, omit this section.' },
   { id: 'offer',    name: 'Offer and Pricing', desc: 'Price and what the visitor gets for it.',
     hint: 'Show only the prices supplied. Show a crossed-out price only if a regular price was supplied.' },
   { id: 'bonus',    name: 'Bonus',             desc: 'Extra items that add value to the offer.',
@@ -104,7 +103,7 @@ const AUDIENCE = [['genz', 'Young creators and Gen Z'], ['moms', 'Mothers and pa
    To add a new preset: add one object here and add a matching
    ".s-<id>" block in styles.css for its mockup. Nothing else changes.
    --------------------------------------------------------------------- */
-const BUILTIN_STYLES = [
+const STYLES = [
   {
     id: 'mono', name: 'Monochrome Editorial',
     description: 'Black and white, oversized serif headlines, ruled columns. Feels like a fashion or architecture magazine.',
@@ -218,331 +217,8 @@ const BUILTIN_STYLES = [
     fit: { personality: ['modern', 'bold', 'warm'], emotion: ['excitement', 'trust'], price: ['budget', 'mid'], audience: ['shoppers', 'genz', 'beginners'] }
   }
 ];
-/* ---------------------------------------------------------------------
-   FONT STACKS (safe system fonts) and RECIPES
-   A "recipe" describes a style's mockup in a few safe choices. Styles
-   without their own CSS block (.s-<id>) are drawn from their recipe.
-   Custom and imported styles can only pick from these lists, so a
-   style file can never inject arbitrary CSS.
-   --------------------------------------------------------------------- */
-const FONT_STACKS = {
-  serif:    'Georgia, "Times New Roman", serif',
-  didone:   '"Bodoni 72", Didot, "Palatino Linotype", Georgia, serif',
-  sans:     'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-  humanist: '"Gill Sans", "Trebuchet MS", "Segoe UI", sans-serif',
-  rounded:  '"Trebuchet MS", "Varela Round", "Segoe UI", system-ui, sans-serif',
-  heavy:    '"Arial Black", "Helvetica Neue", Impact, sans-serif',
-  slab:     'Rockwell, "Courier New", Georgia, serif',
-  mono:     'ui-monospace, "Courier New", Courier, monospace',
-  hand:     '"Segoe Print", "Bradley Hand", "Comic Sans MS", cursive'
-};
-const FONT_LABELS = { serif: 'Classic serif', didone: 'High-contrast serif', sans: 'Clean sans-serif', humanist: 'Humanist sans-serif',
-  rounded: 'Rounded sans-serif', heavy: 'Heavy display sans', slab: 'Slab serif', mono: 'Monospace', hand: 'Handwriting' };
-function stackOf(v) { return FONT_STACKS[v] || v; }
-
-const RECIPE_OPTS = {
-  hero:     [['split', 'Split: text left, image right'], ['splitRev', 'Split: image left, text right'], ['center', 'Centered'], ['colorSplit', 'Color-block split'], ['typeLead', 'Type-led, huge headline']],
-  radius:   [['none', 'Square'], ['sm', 'Slightly rounded'], ['md', 'Rounded'], ['lg', 'Very rounded'], ['pill', 'Soft and pill-like']],
-  border:   [['none', 'None'], ['thin', 'Thin'], ['medium', 'Medium'], ['thick', 'Thick']],
-  shadow:   [['none', 'None'], ['soft', 'Soft'], ['hard', 'Hard offset'], ['dual', 'Soft dual (neumorphic)']],
-  weight:   [['light', 'Light'], ['regular', 'Regular'], ['bold', 'Bold'], ['black', 'Extra bold']],
-  caps:     [['normal', 'Normal case'], ['upper', 'Uppercase']],
-  list:     [['rows', 'Ruled rows'], ['cards', 'Boxes'], ['columns', 'Columns with dividers'], ['open', 'Open, no containers']],
-  button:   [['solid', 'Solid'], ['outline', 'Outlined'], ['pill', 'Pill']],
-  sections: [['plain', 'Plain'], ['bands', 'Alternating color bands'], ['ruled', 'Ruled with lines']],
-  density:  [['tight', 'Tight'], ['normal', 'Normal'], ['airy', 'Airy']]
-};
-const RECIPE_LABELS = { hero: 'Hero layout', radius: 'Corners', border: 'Borders', shadow: 'Shadows', weight: 'Headline weight', caps: 'Headline case',
-  list: 'List layout', button: 'Buttons', sections: 'Section backgrounds', density: 'Spacing' };
-const RECIPE_DEFAULT = { hero: 'split', radius: 'md', border: 'thin', shadow: 'none', weight: 'bold', caps: 'normal', list: 'rows', button: 'solid', sections: 'plain', density: 'normal' };
-
-/* Compact builder for the extra presets. */
-function mk(id, name, desc, cats, pal, fonts, txt, fit, rec) {
-  return {
-    id: id, name: name, description: desc, categories: cats,
-    palette: { bg: pal[0], surface: pal[1], ink: pal[2], muted: pal[3], line: pal[4], accent: pal[5], accent2: pal[6] },
-    fonts: { display: fonts[0], body: fonts[1] },
-    typography: txt[0], layout: txt[1], components: txt[2], image: txt[3], cta: txt[4], avoid: txt[5],
-    fit: { personality: fit[0], emotion: fit[1], price: fit[2], audience: fit[3] },
-    recipe: Object.assign({}, RECIPE_DEFAULT, rec)
-  };
-}
-
-BUILTIN_STYLES.push(
-  mk('depth', 'High-Depth Photography', 'Soft modern look where one large photo carries the hero. Bold headlines, serif accents and diffused shadows.',
-    ['fashion', 'food', 'craft', 'creative', 'personal'],
-    ['#F5F3EF', '#FFFFFF', '#1D1D1F', '#6B6B70', '#E1DDD5', '#D9622B', '#F1E3D3'], ['sans', 'serif'],
-    ['Bold sans-serif headlines with an elegant serif for supporting lines. Generous size and spacing.',
-     'Centered hero where the main image is large and the headline sits close to it. Asymmetric sections with plenty of white space.',
-     'Large radii only where the composition benefits. Soft diffused shadows. Few borders.',
-     'Macro or close-up photography with shallow depth of field. Image is the hero.',
-     'Solid warm accent button with a soft shadow.',
-     'Hard borders, flat clip-art, crowded grids, harsh shadows.'],
-    [['modern', 'refined'], ['delight', 'prestige'], ['mid', 'premium'], ['shoppers', 'selfcare']],
-    { hero: 'center', radius: 'lg', border: 'none', shadow: 'soft', weight: 'bold', list: 'cards', sections: 'plain', density: 'airy' }),
-
-  mk('moderndark', 'ModernDark', 'Cinematic dark interface with cool ambient accents and precise spacing. Premium and technical.',
-    ['tech', 'course', 'digital', 'community'],
-    ['#0B0D12', '#151922', '#EEF1F6', '#98A1B3', '#262D3B', '#7C8CFF', '#1B2236'], ['sans', 'sans'],
-    ['Crisp sans-serif, medium to bold headlines, cool light text on dark.',
-     'Centered hero with plenty of dark space, thin dividers between sections.',
-     'Dark surfaces used deliberately with 1px borders and small radii. Do not turn every element into a glowing card.',
-     'Product screenshots or mockups on dark backgrounds.',
-     'Solid indigo button, light text.',
-     'Neon overload, glow on everything, low-contrast gray text.'],
-    [['modern', 'professional'], ['trust', 'excitement'], ['mid', 'premium'], ['pros', 'genz']],
-    { hero: 'center', radius: 'md', border: 'thin', shadow: 'none', weight: 'bold', list: 'cards', sections: 'ruled' }),
-
-  mk('editorialgrid', 'Editorial Grid', 'Newspaper-like black and white grid with sharp rules and strong alignment.',
-    ['creative', 'personal', 'tech', 'coaching', 'course'],
-    ['#FFFFFF', '#F4F4F4', '#111111', '#555555', '#111111', '#111111', '#E8E8E8'], ['serif', 'sans'],
-    ['Serif headlines, compact sans body, tight leading. Small caps for labels.',
-     'Tight multi-column grid separated by rules. Content is aligned to a visible column structure.',
-     'Square corners, 1px black rules, no shadows. Columns instead of boxes.',
-     'Black-and-white photography, cropped to the grid.',
-     'Solid black rectangle.',
-     'Color gradients, rounded shapes, decorative icons.'],
-    [['professional', 'bold'], ['trust'], ['mid'], ['pros']],
-    { hero: 'split', radius: 'none', border: 'thin', shadow: 'none', weight: 'bold', list: 'columns', sections: 'ruled', density: 'tight' }),
-
-  mk('techstyle', 'TechStyle', 'Confident electric-blue tech look with clear sections and inverted contrast bands.',
-    ['tech', 'course', 'digital', 'community'],
-    ['#F6F9FF', '#FFFFFF', '#0E1B3D', '#4A5A80', '#D5DEF2', '#2563EB', '#DBE7FF'], ['sans', 'sans'],
-    ['Extra-bold sans headlines with a clean sans body. Strong size contrast.',
-     'Split hero with a product visual, alternating light bands, clear numbered steps.',
-     'Medium radius, soft shadows on a few key elements, color bands for rhythm.',
-     'Product or interface screenshots on light blue fields.',
-     'Solid electric blue button with soft shadow.',
-     'Decorative gradients without purpose, too many glows, stock-photo handshakes.'],
-    [['modern', 'professional', 'bold'], ['trust', 'excitement'], ['mid', 'premium'], ['pros', 'beginners']],
-    { hero: 'split', radius: 'md', border: 'none', shadow: 'soft', weight: 'black', list: 'cards', sections: 'bands' }),
-
-  mk('swissmin', 'Minimalist', 'International-style minimalism: strict grid, black, white and one red accent.',
-    ['creative', 'tech', 'personal', 'coaching', 'digital'],
-    ['#FFFFFF', '#F5F5F5', '#111111', '#666666', '#D9D9D9', '#E10600', '#F2F2F2'], ['sans', 'sans'],
-    ['One sans-serif family, strong size hierarchy, left-aligned, medium weight.',
-     'Mathematical grid, asymmetric balance, generous margins and ruled sections.',
-     'Square corners, hairline rules, no shadows. Red used sparingly.',
-     'Precise, high-contrast imagery with lots of margin.',
-     'Solid red rectangle with white text.',
-     'Decoration, gradients, rounded shapes, more than one accent color.'],
-    [['professional', 'modern'], ['trust', 'calm'], ['mid', 'premium'], ['pros']],
-    { hero: 'split', radius: 'none', border: 'thin', shadow: 'none', weight: 'bold', list: 'rows', sections: 'ruled' }),
-
-  mk('kinetic', 'Kinetic', 'Typography-first, massive uppercase type on a dark field with a single electric accent.',
-    ['creative', 'community', 'tech', 'fashion'],
-    ['#0A0A0A', '#161616', '#F5F5F5', '#A8A8A8', '#2A2A2A', '#C6FF00', '#1F1F1F'], ['heavy', 'sans'],
-    ['Massive uppercase headlines with tight leading. Short supporting copy.',
-     'Type-led hero where the headline dominates and the image is secondary. Rhythmic section breaks.',
-     'Square, no shadows, open lists with large numbers.',
-     'High-contrast, cropped imagery used sparingly.',
-     'Neon-lime rectangle with dark text.',
-     'Marquee or keyframe animation for Lynk.id, soft pastels, small timid type.'],
-    [['bold', 'modern'], ['excitement'], ['budget', 'mid'], ['genz']],
-    { hero: 'typeLead', radius: 'none', border: 'none', shadow: 'none', weight: 'black', caps: 'upper', list: 'open', sections: 'ruled', density: 'tight' }),
-
-  mk('flat', 'Flat Design', 'Crisp, solid-color 2D surfaces with simple geometry and no depth effects.',
-    ['digital', 'course', 'kids', 'tech', 'community'],
-    ['#F4F8FB', '#FFFFFF', '#1F2A44', '#56637E', '#D2DCE8', '#18A999', '#FFC145'], ['rounded', 'sans'],
-    ['Friendly bold sans headlines, plain readable body text.',
-     'Split hero with a flat illustration or product image, alternating solid color bands.',
-     'Solid fills, small radii, no shadows or gradients.',
-     'Flat illustrations and simple shapes.',
-     'Solid teal button, no shadow.',
-     'Shadows, gradients, textures, 3D effects.'],
-    [['modern', 'playful', 'warm'], ['delight', 'trust'], ['budget', 'mid'], ['beginners', 'genz', 'moms']],
-    { hero: 'split', radius: 'md', border: 'none', shadow: 'none', weight: 'bold', list: 'cards', sections: 'bands' }),
-
-  mk('magazine', 'Premium Magazine', 'Deep charcoal with champagne gold, oversized serif and sharp edges. Fashion-forward.',
-    ['fashion', 'personal', 'creative', 'coaching'],
-    ['#14110F', '#1E1A17', '#F3ECE0', '#A89F90', '#3B342C', '#D4B26A', '#241F1B'], ['didone', 'sans'],
-    ['Oversized high-contrast serif headlines, light weight, with small tracked sans labels.',
-     'Asymmetric editorial grid, image left and text right, columns separated by hairlines.',
-     'Sharp edges, fine gold rules, outlined buttons.',
-     'Fashion-forward editorial photography.',
-     'Gold outlined rectangle.',
-     'Bright colors, rounded corners, playful shapes.'],
-    [['refined', 'bold'], ['prestige'], ['premium'], ['shoppers', 'pros']],
-    { hero: 'splitRev', radius: 'none', border: 'thin', shadow: 'none', weight: 'regular', list: 'columns', button: 'outline', sections: 'ruled', density: 'airy' }),
-
-  mk('material', 'Material Design', 'Structured, friendly interface language with clear elevation, tonal color and pill buttons.',
-    ['tech', 'digital', 'course', 'community'],
-    ['#FEF7FF', '#F3EDF7', '#1D1B20', '#625B71', '#CAC4D0', '#6750A4', '#E8DEF8'], ['sans', 'sans'],
-    ['Clean sans-serif, regular-weight headlines, clear hierarchy.',
-     'Split hero, tonal surface containers, clear elevation levels.',
-     'Large radii, soft elevation shadows, pill buttons.',
-     'Product screenshots in rounded frames.',
-     'Filled purple pill button.',
-     'Copying a stock Material dashboard, harsh borders.'],
-    [['modern', 'professional', 'warm'], ['trust', 'delight'], ['budget', 'mid'], ['beginners', 'pros']],
-    { hero: 'split', radius: 'lg', border: 'none', shadow: 'soft', weight: 'regular', list: 'cards', button: 'pill' }),
-
-  mk('boldtype', 'Bold Typography', 'Poster-like page where gigantic type is the main visual and everything else stays quiet.',
-    ['creative', 'personal', 'community', 'fashion', 'course'],
-    ['#F2F0EA', '#FFFFFF', '#0D0D0D', '#4F4F4F', '#0D0D0D', '#FF3B1D', '#E6E2D8'], ['heavy', 'sans'],
-    ['Extremely large, uppercase, heavy headlines. Small plain supporting text.',
-     'Dramatic negative space, poster-like composition, image secondary to type.',
-     'Square, no containers, open lists with big numbers.',
-     'Image small or cropped; type does the work.',
-     'Solid black-and-red rectangle.',
-     'Decoration, small headlines, many competing elements.'],
-    [['bold', 'modern'], ['excitement', 'prestige'], ['mid', 'premium'], ['genz', 'shoppers']],
-    { hero: 'typeLead', radius: 'none', border: 'none', shadow: 'none', weight: 'black', caps: 'upper', list: 'open', sections: 'plain', density: 'airy' }),
-
-  mk('classic', 'Classic School', 'Warm paper tones, traditional serif and crimson-and-gold accents. Scholarly and trustworthy.',
-    ['course', 'coaching', 'kids', 'personal', 'digital'],
-    ['#F6EFDF', '#EDE2C8', '#2B2118', '#6E5B45', '#CDBB97', '#8B1E2D', '#B8923A'], ['serif', 'serif'],
-    ['Traditional serif for both headings and body. Centered, formal headlines.',
-     'Centered hero, ruled sections, a library or university feeling.',
-     'Square corners, medium borders in warm brown, no shadows.',
-     'Archival or portrait imagery in warm tones.',
-     'Crimson rectangle with cream text.',
-     'Neon colors, playful shapes, sans-serif headlines.'],
-    [['professional', 'refined', 'warm'], ['trust', 'prestige'], ['mid', 'premium'], ['pros', 'moms']],
-    { hero: 'center', radius: 'none', border: 'medium', shadow: 'none', weight: 'bold', list: 'rows', sections: 'ruled' }),
-
-  mk('artisan', 'Premium Dynamic Artisan', 'Warm hybrid artisan look: oversized bold type, big rounded shapes and tactile color.',
-    ['food', 'craft', 'fashion', 'wellness'],
-    ['#FFF6E9', '#F7E3C8', '#3A2418', '#7A5C48', '#E7CDAA', '#C2410C', '#F4B860'], ['heavy', 'sans'],
-    ['Oversized bold sans headlines with a warm, friendly tone.',
-     'Centered hero with a large product image, alternating colored bands.',
-     'Large radii, soft shadows, pill buttons.',
-     'Macro product photography with warm light.',
-     'Terracotta pill button.',
-     'Cold colors, rigid grids, tiny type.'],
-    [['warm', 'bold', 'playful'], ['delight', 'belonging'], ['mid', 'premium'], ['shoppers', 'moms']],
-    { hero: 'center', radius: 'lg', border: 'none', shadow: 'soft', weight: 'black', list: 'cards', button: 'pill', sections: 'bands' }),
-
-  mk('soft3d', '3D Soft', 'Candy colors and soft, inflated surfaces that feel like a premium digital toy.',
-    ['kids', 'digital', 'creative', 'community', 'course'],
-    ['#F3EEFF', '#FFFFFF', '#3B2A66', '#7A6AA6', '#E2D8FA', '#FF7AB6', '#B9E6FF'], ['rounded', 'rounded'],
-    ['Rounded, extra-bold headlines, friendly and playful.',
-     'Centered hero with a soft floating product, generous round shapes.',
-     'Very large radii, layered soft shadows, pill buttons.',
-     'Soft 3D renders or clay-like illustrations.',
-     'Pink pill button with soft shadow.',
-     'Sharp corners, flat black outlines, serious corporate tones.'],
-    [['playful', 'warm'], ['delight'], ['budget', 'mid'], ['genz', 'moms', 'beginners']],
-    { hero: 'center', radius: 'pill', border: 'none', shadow: 'dual', weight: 'black', list: 'cards', button: 'pill' }),
-
-  mk('professional', 'Professional', 'Refined editorial minimalism on warm ivory with rule lines and classical proportions.',
-    ['coaching', 'personal', 'course', 'creative'],
-    ['#FBF7EE', '#F2EBDA', '#2A2623', '#6B6258', '#D8CFBB', '#7A5A2B', '#E9DFC8'], ['serif', 'serif'],
-    ['Elegant serif headlines in regular weight, measured line lengths.',
-     'Split hero, ruled sections with classical spacing.',
-     'Square corners, thin rules, no shadows.',
-     'Portrait or workspace photography with natural light.',
-     'Bronze rectangle with ivory text.',
-     'Loud colors, heavy shadows, playful decoration.'],
-    [['professional', 'refined'], ['trust'], ['mid', 'premium'], ['pros']],
-    { hero: 'split', radius: 'none', border: 'thin', shadow: 'none', weight: 'regular', list: 'rows', sections: 'ruled', density: 'airy' }),
-
-  mk('corporate', 'Corporate', 'Friendly modern SaaS look in indigo and violet with soft colored shadows.',
-    ['tech', 'course', 'coaching', 'digital'],
-    ['#F7F7FF', '#FFFFFF', '#1E1B4B', '#5B5B8F', '#DCDBF5', '#5B4BFF', '#E8E6FF'], ['sans', 'sans'],
-    ['Clean geometric sans-serif, bold headlines, comfortable body copy.',
-     'Split hero with product visual, color bands, clear sections. Use SaaS patterns selectively.',
-     'Rounded corners, soft shadows, light borders.',
-     'Product screenshots and simple isometric illustrations.',
-     'Solid indigo button.',
-     'Dashboard-style boxes everywhere, cold gray palette.'],
-    [['professional', 'modern', 'warm'], ['trust'], ['mid', 'premium'], ['pros', 'beginners']],
-    { hero: 'split', radius: 'lg', border: 'none', shadow: 'soft', weight: 'bold', list: 'cards', sections: 'bands' }),
-
-  mk('sketch', 'Sketch', 'Hand-drawn, paper-and-marker feeling with playful imperfection.',
-    ['kids', 'creative', 'craft', 'course', 'community'],
-    ['#FFFDF4', '#FFF7D6', '#2B2B2B', '#5E5E5E', '#2B2B2B', '#E4572E', '#FFE08A'], ['hand', 'hand'],
-    ['Handwritten-style headings and body, relaxed and friendly.',
-     'Split hero, paper-like background, notes and boxes that look hand drawn.',
-     'Marker-like medium borders, slightly rounded corners, no shadows.',
-     'Doodles, simple drawings and photos with taped or outlined frames.',
-     'Orange marker-style button with a dark outline.',
-     'Polished glossy effects, strict grids, thin hairlines.'],
-    [['playful', 'warm'], ['delight', 'belonging'], ['budget', 'mid'], ['moms', 'genz', 'beginners']],
-    { hero: 'split', radius: 'sm', border: 'medium', shadow: 'none', weight: 'bold', list: 'cards', sections: 'plain' }),
-
-  mk('industrial', 'Industrial', 'Tactile hardware feel in matte neutrals with a safety-orange accent.',
-    ['tech', 'craft', 'creative'],
-    ['#E9E7E2', '#D9D6CF', '#1C1C1C', '#55524B', '#8E8B84', '#FF5A00', '#2A2A2A'], ['heavy', 'mono'],
-    ['Heavy uppercase headlines with monospace body text, like labels on equipment.',
-     'Split hero, ruled sections, compact spacing, spec-sheet feeling.',
-     'Slightly rounded corners, medium borders, matte surfaces with no gloss.',
-     'Product or hardware photography, framed like a spec sheet.',
-     'Safety-orange rectangle with dark text.',
-     'Glossy gradients, pastel colors, decorative flourishes.'],
-    [['professional', 'bold', 'modern'], ['trust', 'excitement'], ['mid', 'premium'], ['pros']],
-    { hero: 'split', radius: 'sm', border: 'medium', shadow: 'none', weight: 'bold', caps: 'upper', list: 'cards', sections: 'ruled', density: 'tight' }),
-
-  mk('neumorph', 'Neumorphism', 'Monochrome surfaces that look softly extruded or pressed with dual shadows.',
-    ['tech', 'wellness', 'digital'],
-    ['#E6EAF0', '#E6EAF0', '#2F3B52', '#5B6880', '#D0D6E0', '#4B6BFB', '#E6EAF0'], ['sans', 'sans'],
-    ['Clean sans-serif, bold headlines, calm and readable.',
-     'Split hero, a few raised panels. Use sparingly so not everything becomes a panel.',
-     'Large radii, soft dual shadows, no borders. Keep text contrast accessible.',
-     'Soft product renders on the same tinted background.',
-     'Raised blue button.',
-     'Hard borders, high-saturation colors, low-contrast text.'],
-    [['calm', 'modern'], ['calm', 'trust'], ['mid'], ['pros', 'selfcare']],
-    { hero: 'split', radius: 'lg', border: 'none', shadow: 'dual', weight: 'bold', list: 'cards', sections: 'plain', density: 'airy' }),
-
-  mk('organic', 'Organic Wabi-Sabi', 'Moss green, terracotta and sand with organic shapes and quiet imperfection.',
-    ['wellness', 'food', 'craft', 'fashion', 'personal'],
-    ['#F1EBDD', '#E3D8C0', '#33402B', '#68735A', '#CFC3A6', '#556B3B', '#B4623A'], ['serif', 'humanist'],
-    ['Soft regular-weight serif headlines, humanist sans body.',
-     'Split hero with organic image shapes, open lists, warm alternating bands, plenty of space.',
-     'Asymmetric large radii, very light shadows, no hard borders.',
-     'Natural light, handmade textures, earthy tones.',
-     'Moss pill button with cream text.',
-     'Neon, sharp tech visuals, perfect symmetry.'],
-    [['natural', 'calm', 'warm'], ['calm', 'belonging'], ['mid', 'premium'], ['selfcare', 'moms']],
-    { hero: 'split', radius: 'lg', border: 'none', shadow: 'soft', weight: 'regular', list: 'open', button: 'pill', sections: 'bands', density: 'airy' }),
-
-  mk('retrobloom', 'Retro Bloom', 'Warm retro boutique: sage, peach, mustard and cream with a vintage stationery feel.',
-    ['craft', 'digital', 'kids', 'creative', 'fashion', 'food'],
-    ['#FBF1DC', '#F6DDB8', '#3D3A2B', '#6C6850', '#E3CFA3', '#E0A526', '#8FAE8B'], ['serif', 'humanist'],
-    ['Expressive retro serif headlines, small clean sans body.',
-     'Centered airy hero, alternating open sections and warm bands, full-width offer band.',
-     'Compact rounded rectangles in mustard, thin warm borders, no shadows.',
-     'Warm natural-light product photography with a crafted feel.',
-     'Mustard rounded rectangle, not a pill.',
-     'Neon colors, cold corporate layouts, heavy gradients.'],
-    [['warm', 'playful'], ['delight', 'belonging'], ['budget', 'mid'], ['moms', 'shoppers', 'beginners']],
-    { hero: 'center', radius: 'md', border: 'thin', shadow: 'none', weight: 'bold', list: 'cards', sections: 'bands' }),
-
-  mk('popweb', 'Playful Pop Web', 'Internet-culture energy: bubblegum pink, cyan and black type with sticker-like blocks.',
-    ['community', 'course', 'creative', 'digital', 'tech'],
-    ['#FFFFFF', '#FFE4F1', '#111111', '#444444', '#111111', '#FF5CAA', '#6FE7F2'], ['heavy', 'sans'],
-    ['Oversized heavy sans headlines, compact readable body text.',
-     'Color-block hero with an object-led image, clear white content zones and colorful section changes.',
-     'Medium radius, medium black outlines, hard shadows used selectively.',
-     'Cutout objects, creator portraits and nostalgic digital accessories.',
-     'Pink rectangle with black outline and hard shadow.',
-     'Random decoration, tiny low-contrast text, childish layouts for serious offers.'],
-    [['bold', 'playful', 'modern'], ['excitement', 'delight', 'belonging'], ['budget', 'mid'], ['genz']],
-    { hero: 'colorSplit', radius: 'md', border: 'medium', shadow: 'hard', weight: 'black', list: 'cards', sections: 'bands' }),
-
-  mk('handmade', 'Whimsical Handmade', 'Cheerful craft-shop look: sage, burgundy, terracotta and butter yellow on cream.',
-    ['craft', 'kids', 'food', 'digital', 'creative'],
-    ['#FFF4E3', '#F6DFC6', '#4A2A2A', '#7E5C54', '#E5C9A8', '#9E2F3B', '#9DB59A'], ['slab', 'humanist'],
-    ['Chunky characterful serif headlines with friendly sans body.',
-     'Centered shop-banner hero, alternating colored panels, storytelling sections.',
-     'Rounded panels, medium borders in warm brown, tactile paper feeling.',
-     'Handmade product photography and consistent illustrations.',
-     'Burgundy rectangle with cream text.',
-     'Sterile corporate geometry, glossy tech effects, uniform cards.'],
-    [['warm', 'playful', 'natural'], ['delight', 'belonging'], ['budget', 'mid'], ['moms', 'shoppers']],
-    { hero: 'center', radius: 'lg', border: 'medium', shadow: 'none', weight: 'black', list: 'cards', sections: 'bands' })
-);
-
-let STYLES = BUILTIN_STYLES.slice();
 const STYLE_BY_ID = {};
-let customStyles = [];
-function rebuildStyles() {
-  STYLES = BUILTIN_STYLES.concat(customStyles);
-  Object.keys(STYLE_BY_ID).forEach(function (k) { delete STYLE_BY_ID[k]; });
-  STYLES.forEach(function (s) { STYLE_BY_ID[s.id] = s; });
-}
-rebuildStyles();
+STYLES.forEach(function (s) { STYLE_BY_ID[s.id] = s; });
 function getStyle(id) { return STYLE_BY_ID[id] || STYLES[0]; }
 
 /* Copywriting formulas offered in Step 3. "use" goes into the prompt. */
@@ -570,71 +246,11 @@ const FORMULAS = [
     use: '4U for headlines: make each headline Useful, Unique and Ultra-specific. Only make it Urgent if a real deadline is supplied; otherwise skip urgency.' }
 ];
 
-/* ---------------------------------------------------------------------
-   PAGE FEATURES (Step 3). "lynk" tells how each one behaves on Lynk.id,
-   which only allows inline CSS and no scripts:
-     yes     = works as is
-     simpler = a reduced version that needs no script
-     no      = impossible without a <style> block, keyframes or JavaScript
-   --------------------------------------------------------------------- */
-const FEATURES = [
-  { id: 'accordion', name: 'Accordion', desc: 'Answers open and close, usually in the FAQ.', lynk: 'yes',
-    lynkNote: 'Uses the built-in <details> tag, so it works with inline CSS.',
-    lynkUse: 'Accordion (FAQ): use <details><summary>Question</summary><div>Answer</div></details> with all styling inline. No JavaScript.',
-    stdUse: 'Accordion (FAQ): use native <details>/<summary> elements styled with CSS. No JavaScript is needed.' },
-  { id: 'fade', name: 'Fade-in on scroll', desc: 'Sections fade in softly as they come into view.', lynk: 'no',
-    lynkNote: 'Needs JavaScript or keyframes, which Lynk.id does not allow. It will be left out.',
-    lynkUse: '',
-    stdUse: 'Fade-in on scroll: each section below the hero fades in and rises about 14px (opacity and transform, about 500ms) once, when it enters the viewport, using a small IntersectionObserver. Content must stay visible if JavaScript fails (add the hidden state with JavaScript only) and prefers-reduced-motion must disable it.' },
-  { id: 'popup', name: 'Pop-up', desc: 'A small window opened by a button, for the offer or a reminder.', lynk: 'simpler',
-    lynkNote: 'A real overlay needs JavaScript. You get a tap-to-open panel instead.',
-    lynkUse: 'Pop-up (simpler version): a real overlay is not possible. Use a tap-to-open <details> panel styled as a small card that holds the pop-up content and the primary CTA. It must never open by itself.',
-    stdUse: 'Pop-up: a native <dialog> opened by a visible button, with a close button, Esc to close, focus returning to the button, and content only from this brief. Never open it automatically on page load, and no exit-intent tricks or fake urgency.' },
-  { id: 'progress', name: 'Progress bar', desc: 'A bar showing a real percentage, such as seats filled or course progress.', lynk: 'yes',
-    lynkNote: 'Works as a static bar with the real percentage written in the inline width.',
-    lynkUse: 'Progress bar: draw it with a nested <div> whose inline width equals the real percentage. Static, no animation. Use only the progress figures listed under "Real numbers"; if none are listed, skip it.',
-    stdUse: 'Progress bar: a <div role="progressbar" aria-valuenow aria-valuemin aria-valuemax> whose fill width comes from the real percentage, with a text label. Use only the progress figures listed under "Real numbers"; if none are listed, skip it. No JavaScript is needed.' },
-  { id: 'hover', name: 'Hover effects', desc: 'Buttons and cards react when the pointer moves over them.', lynk: 'no',
-    lynkNote: 'Hover needs a <style> block, which Lynk.id does not allow. It will be left out.',
-    lynkUse: '',
-    stdUse: 'Hover and focus effects: a subtle lift or color shift on buttons and cards (transition 150 to 200ms) with matching :focus-visible styles for keyboard users. Never hide information behind hover, because touch screens cannot hover.' },
-  { id: 'slider', name: 'Auto-sliding slider', desc: 'Testimonials or images that slide by themselves.', lynk: 'simpler',
-    lynkNote: 'Auto-advance needs JavaScript. You get a swipe row instead.',
-    lynkUse: 'Slider (simpler version): a horizontal swipe row with overflow-x: auto; scroll-snap-type: x mandatory; each slide flex: 0 0 85%; scroll-snap-align: start. No auto-advance. Use it for the testimonials and images listed in this brief; with fewer than two items skip it.',
-    stdUse: 'Auto-sliding slider for the testimonials and images listed in this brief: a CSS scroll-snap track with previous and next buttons, auto-advance about every 4 to 5 seconds using small vanilla JavaScript, paused on hover, focus and touch, and stopped completely when prefers-reduced-motion is set. With fewer than two items skip it.' },
-  { id: 'counter', name: 'Auto-counting numbers', desc: 'Numbers count up when they come into view.', lynk: 'simpler',
-    lynkNote: 'Counting needs JavaScript. The numbers are shown already finished.',
-    lynkUse: 'Auto-counting numbers (simpler version): counting is not possible without JavaScript, so show the final numbers statically in large type. Use only the counting figures listed under "Real numbers"; if none are listed, skip it.',
-    stdUse: 'Auto-counting numbers: count from 0 up to each real figure once when it enters the viewport (about 1.5 seconds, vanilla JavaScript with requestAnimationFrame). The final value must already be in the HTML so it shows without JavaScript, and prefers-reduced-motion shows it immediately. Use only the counting figures listed under "Real numbers"; if none are listed, skip it.' },
-  { id: 'floating', name: 'Floating button or text', desc: 'A button or short line that stays on screen while scrolling.', lynk: 'simpler',
-    lynkNote: 'A sticky button inside the page. It may not stay in view on every Lynk.id layout, so test it.',
-    lynkUse: 'Floating button (simpler version): position: sticky; bottom: 12px inside the root container, showing the primary CTA label and linking to the CTA URL. Do not use position: fixed. Tell me it may not stay in view on every Lynk.id layout and that I should test it.',
-    stdUse: 'Floating CTA: a bar or button fixed to the bottom of the screen with the primary CTA label and, if it fits, one short line taken from this brief. It appears after the hero scrolls out of view, hides again when the final CTA is visible, never covers content (add bottom padding to the page) and respects the device safe area. No urgency claims.' }
-];
-const FEATURE_BY_ID = {};
-FEATURES.forEach(function (f) { FEATURE_BY_ID[f.id] = f; });
-/* Features that need JavaScript on a standard website. */
-const JS_FEATURES = ['fade', 'popup', 'slider', 'counter', 'floating'];
-
-/* Where each kind of extra image belongs on the page. */
-const GALLERY_KINDS = [
-  { id: 'product',    label: 'Product mockup or screenshot',   sec: 'included', secName: 'What\'s Included' },
-  { id: 'bonus',      label: 'Bonus image',                    sec: 'bonus',    secName: 'Bonus' },
-  { id: 'result',     label: 'Real result or before/after',    sec: 'benefits', secName: 'Benefits' },
-  { id: 'author',     label: 'Photo of you or your team',      sec: 'solution', secName: 'Solution' },
-  { id: 'credential', label: 'Real certificate or credential', sec: 'proof',    secName: 'Social Proof' },
-  { id: 'other',      label: 'Other',                          sec: 'features', secName: 'Features' }
-];
-const GALLERY_KIND_BY_ID = {};
-GALLERY_KINDS.forEach(function (k) { GALLERY_KIND_BY_ID[k.id] = k; });
-const STAT_TYPES = [['count', 'Counting number'], ['progress', 'Progress bar (0 to 100)']];
-const MAX_TESTIMONIALS = 6, MAX_GALLERY = 8, MAX_STATS = 4;
-
 /* Text used inside the mockup (not the app UI). */
 const L10N = {
   en: {
     sec: { problem: 'The problem', solution: 'The solution', benefits: 'Benefits', features: 'Features', how: 'How it works',
-           included: 'What\'s included', proof: 'Social proof', numbers: 'In numbers', offer: 'Offer and pricing', bonus: 'Bonus', faq: 'Questions' },
+           included: 'What\'s included', proof: 'Social proof', offer: 'Offer and pricing', bonus: 'Bonus', faq: 'Questions' },
     cta: { digital: 'Get the product', service: 'Book a consultation', leads: 'Join the list', brand: 'Get in touch',
            physical: 'Shop now', course: 'Join the course', other: 'Learn more' },
     forAudience: 'For ', yourProduct: 'Your product', placeholder: 'Content for this part will be written from your brief.',
@@ -643,7 +259,7 @@ const L10N = {
   },
   id: {
     sec: { problem: 'Masalahnya', solution: 'Solusinya', benefits: 'Manfaat', features: 'Fitur', how: 'Cara kerja',
-           included: 'Isi paket', proof: 'Bukti sosial', numbers: 'Dalam angka', offer: 'Penawaran', bonus: 'Bonus', faq: 'Pertanyaan umum' },
+           included: 'Isi paket', proof: 'Bukti sosial', offer: 'Penawaran', bonus: 'Bonus', faq: 'Pertanyaan umum' },
     cta: { digital: 'Dapatkan Sekarang', service: 'Jadwalkan Konsultasi', leads: 'Daftar Sekarang', brand: 'Hubungi Saya',
            physical: 'Beli Sekarang', course: 'Gabung Sekarang', other: 'Pelajari Selengkapnya' },
     forAudience: 'Untuk ', yourProduct: 'Produk kamu', placeholder: 'Isi bagian ini akan ditulis dari brief kamu.',
@@ -737,156 +353,23 @@ function readable(hex) {
   return (1.05 / (l + 0.05)) >= ((l + 0.05) / 0.05) ? '#FFFFFF' : '#111111';
 }
 
-/* ---- Brand colors: names and hex codes become one resolved palette ---- */
-function rgbOf(hex) { return [1, 3, 5].map(function (i) { return parseInt(hex.substr(i, 2), 16); }); }
-function toHex(rgb) {
-  return '#' + rgb.map(function (v) { v = Math.max(0, Math.min(255, Math.round(v))); return (v < 16 ? '0' : '') + v.toString(16); }).join('');
-}
-/* t = how much of b is mixed into a (0 to 1). */
-function mixHex(a, b, t) {
-  const x = rgbOf(a), y = rgbOf(b);
-  return toHex([0, 1, 2].map(function (i) { return x[i] * (1 - t) + y[i] * t; }));
-}
-function satOf(hex) { const c = rgbOf(hex), mx = Math.max.apply(null, c), mn = Math.min.apply(null, c); return mx ? (mx - mn) / mx : 0; }
-function lc(h) { return String(h || '').toLowerCase(); }
-
-/* Color words in Indonesian and English. Role: light = background candidate, dark = text candidate. */
-const COLOR_NAMES = [
-  [['putih tulang', 'off-white', 'off white'], '#F8F5EE', 'light'],
-  [['putih', 'white'], '#FFFFFF', 'light'],
-  [['krem', 'cream'], '#FAF3E3', 'light'],
-  [['gading', 'ivory'], '#FBF7EA', 'light'],
-  [['beige', 'pasir', 'sand'], '#E6D9BF', 'light'],
-  [['abu muda', 'abu-abu muda', 'light gray', 'light grey'], '#E8EAEE', 'light'],
-  [['hitam', 'black'], '#111111', 'dark'],
-  [['arang', 'charcoal'], '#2B2B2B', 'dark'],
-  [['abu-abu tua', 'abu tua', 'dark gray', 'dark grey'], '#4B5563', 'accent'],
-  [['abu-abu', 'abu abu', 'abu', 'gray', 'grey'], '#8A919B', 'accent'],
-  [['biru muda', 'biru langit', 'light blue', 'sky blue', 'baby blue'], '#5BC0EB', 'accent'],
-  [['biru tua', 'biru dongker', 'biru navy', 'navy blue', 'navy', 'dark blue'], '#16335F', 'accent'],
-  [['biru tosca', 'tosca', 'turquoise', 'teal', 'blue-teal', 'blue teal'], '#14A3A8', 'accent'],
-  [['biru', 'blue'], '#2563EB', 'accent'],
-  [['orange', 'oranye', 'jingga'], '#F97316', 'accent'],
-  [['kuning muda', 'light yellow'], '#FDE68A', 'accent'],
-  [['kuning', 'yellow'], '#FACC15', 'accent'],
-  [['mustard', 'mustar'], '#D49A1A', 'accent'],
-  [['emas', 'gold'], '#C9A24B', 'accent'],
-  [['merah muda', 'pink'], '#F472B6', 'accent'],
-  [['blush'], '#F6C9CF', 'accent'],
-  [['hot pink', 'fuchsia', 'fuksia'], '#EC4899', 'accent'],
-  [['merah marun', 'marun', 'maroon', 'burgundy'], '#7F1D2D', 'accent'],
-  [['merah', 'red'], '#DC2626', 'accent'],
-  [['peach', 'persik'], '#FFB68A', 'accent'],
-  [['coral', 'koral'], '#FF7F6B', 'accent'],
-  [['terracotta', 'terakota', 'bata'], '#C2693A', 'accent'],
-  [['ungu muda', 'lavender', 'lilac', 'lila'], '#C4B5FD', 'accent'],
-  [['ungu tua', 'plum'], '#5B2A6E', 'accent'],
-  [['ungu', 'purple', 'violet'], '#7C3AED', 'accent'],
-  [['hijau muda', 'light green', 'mint'], '#8EE0B0', 'accent'],
-  [['hijau tua', 'dark green', 'forest green', 'hijau botol'], '#14532D', 'accent'],
-  [['sage', 'hijau sage'], '#9CAF88', 'accent'],
-  [['olive', 'zaitun'], '#6B7A2F', 'accent'],
-  [['moss', 'lumut'], '#5A7240', 'accent'],
-  [['hijau', 'green'], '#16A34A', 'accent'],
-  [['coklat muda', 'cokelat muda', 'tan'], '#B08968', 'accent'],
-  [['coklat tua', 'cokelat tua', 'dark brown'], '#4A2C1A', 'accent'],
-  [['coklat', 'cokelat', 'brown'], '#7C4A2D', 'accent'],
-  [['silver', 'perak'], '#C0C6CE', 'accent']
-];
-let COLOR_RE = null;
-const COLOR_MAP = {};
-function colorRe() {
-  if (COLOR_RE) return COLOR_RE;
-  const names = [];
-  COLOR_NAMES.forEach(function (e) { e[0].forEach(function (n) { names.push(n); COLOR_MAP[n] = { hex: e[1], role: e[2], name: e[0][0] }; }); });
-  names.sort(function (a, b) { return b.length - a.length; });
-  const alt = names.map(function (n) { return n.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'); }).join('|');
-  COLOR_RE = new RegExp('(#(?:[0-9a-f]{6}|[0-9a-f]{3})(?![0-9a-f]))|(?:^|[^a-z#])(' + alt + ')(?![a-z])', 'g');
-  return COLOR_RE;
-}
-/* Returns [{ hex, label, role }] in the order the colors appear in the text. */
-function parseColorText(s) {
-  const text = String(s || '').toLowerCase().replace(/\s+/g, ' ');
-  const re = colorRe(); re.lastIndex = 0;
-  const found = []; let m;
-  while ((m = re.exec(text))) {
-    if (m[1]) {
-      let h = m[1];
-      if (h.length === 4) h = '#' + h[1] + h[1] + h[2] + h[2] + h[3] + h[3];
-      const l = luminance(h), sat = satOf(h);
-      found.push({ hex: h, label: h.toUpperCase(), role: (l > 0.8 && sat < 0.25) ? 'light' : (l < 0.02 ? 'dark' : 'accent') });
-    } else if (COLOR_MAP[m[2]]) {
-      const e = COLOR_MAP[m[2]];
-      found.push({ hex: lc(e.hex), label: e.name, role: e.role });
-    }
-  }
-  return found;
-}
-/* Sorts what was found into roles: accents in order, first light = background, first dark = text. */
-function brandFromText(s) {
-  const found = parseColorText(s), out = { accents: [], bg: '', surface: '', ink: '', found: found };
-  found.forEach(function (c) {
-    if (c.role === 'light') { if (!out.bg) out.bg = c.hex; else if (!out.surface && c.hex !== out.bg) out.surface = c.hex; }
-    else if (c.role === 'dark') { if (!out.ink) out.ink = c.hex; }
-    else if (out.accents.indexOf(c.hex) === -1) out.accents.push(c.hex);
-  });
-  return out;
-}
-
-/* One palette for the preview AND the prompt.
-   Order of priority: color pickers, then colors read from the text, then the style's own palette.
-   src[role] says where each color came from: brand, derived, adjusted or style. */
-function resolvePalette(p, style) {
-  const c = p.content, b = c.brand || {}, t = brandFromText(c.colors);
-  const hexOf = function (v) { const h = normHex(v); return h ? lc(h) : ''; };
-  const br = {
-    accent: hexOf(b.primary) || t.accents[0] || '', accent2: hexOf(b.secondary) || t.accents[1] || '',
-    bg: hexOf(b.background) || t.bg || '', ink: hexOf(b.text) || t.ink || '', surface: t.surface || ''
-  };
-  const pal = {}, src = {};
-  Object.keys(style.palette).forEach(function (k) { pal[k] = lc(style.palette[k]); src[k] = 'style'; });
-  let bgSet = false, inkSet = false;
-  if (br.bg) { pal.bg = br.bg; src.bg = 'brand'; bgSet = true; }
-  if (br.ink) { pal.ink = br.ink; src.ink = 'brand'; inkSet = true; }
-  // Keep text readable whichever one the user changed.
-  if (contrastRatio(pal.bg, pal.ink) < 4.5) {
-    if (inkSet && !bgSet) { pal.bg = luminance(pal.ink) < 0.4 ? '#ffffff' : '#111111'; src.bg = 'adjusted'; bgSet = true; }
-    else { pal.ink = luminance(pal.bg) > 0.4 ? '#1a1a1a' : '#f5f5f5'; src.ink = 'adjusted'; inkSet = true; }
-  }
-  if (bgSet || inkSet) {
-    pal.surface = br.surface || mixHex(pal.bg, pal.ink, luminance(pal.bg) > 0.4 ? 0.06 : 0.12); src.surface = br.surface ? 'brand' : 'derived';
-    pal.line = mixHex(pal.bg, pal.ink, 0.18); src.line = 'derived';
-    let m = 0.42; pal.muted = mixHex(pal.ink, pal.bg, m);
-    while (contrastRatio(pal.muted, pal.bg) < 4.5 && m > 0.1) { m -= 0.06; pal.muted = mixHex(pal.ink, pal.bg, m); }
-    src.muted = 'derived';
-  } else if (br.surface) { pal.surface = br.surface; src.surface = 'brand'; }
-  if (br.accent) { pal.accent = br.accent; src.accent = 'brand'; }
-  if (br.accent2) { pal.accent2 = br.accent2; src.accent2 = 'brand'; }
-  else if (br.accent) { pal.accent2 = mixHex(br.accent, luminance(pal.bg) > 0.4 ? '#ffffff' : '#000000', 0.6); src.accent2 = 'derived'; }
-  // Accent used as small text on the background needs 4.5:1; darken (or lighten) it toward the text color.
-  let ai = pal.accent, m2 = 0;
-  while (contrastRatio(ai, pal.bg) < 4.5 && m2 < 0.95) { m2 += 0.1; ai = mixHex(pal.accent, pal.ink, m2); }
-  pal.accentInk = ai;
-  let a2 = pal.accent2, m3 = 0;
-  while (contrastRatio(a2, pal.bg) < 4.5 && m3 < 0.95) { m3 += 0.1; a2 = mixHex(pal.accent2, pal.ink, m3); }
-  pal.accent2Ink = a2;
-  return { pal: pal, src: src, found: t.found, hasBrand: !!(br.accent || br.accent2 || br.bg || br.ink), unreadable: !!c.colors.trim() && !t.found.length };
-}
-function srcText(s) {
-  return s === 'brand' ? 'your color' : s === 'derived' ? 'derived from your colors' : s === 'adjusted' ? 'adjusted for readability' : 'style default';
-}
-
 /* =====================================================================
    3. PROJECT MODEL + STORAGE
    ===================================================================== */
 
-const KEYS = { projects: 'lpps.projects.v1', settings: 'lpps.settings.v1', styles: 'lpps.styles.v1' };
+const KEYS = { projects: 'lpps.projects.v1', settings: 'lpps.settings.v1', gemini: 'lpps.gemini.v1' };
+const GEMINI_SESSION_KEY = 'lpps.gemini.session';
+const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/';
+const GEMINI_DEFAULT_MODELS = ['gemini-flash-latest', 'gemini-pro-latest'];
 const MAX_STORED_IMAGE_CHARS = 700000; // about 500 KB of image data
 
 const state = {
   view: 'dashboard',
   projects: [],
-  settings: { platform: 'lynk', language: 'id' },
+  settings: { platform: 'lynk', language: 'id', geminiModel: 'gemini-flash-latest' },
+  gemini: { key: '', remember: false, models: [], busy: false, controller: null, status: { msg: '', kind: 'info' } },
+  gen: null,           // last Gemini answer: { projectId, text, model, finish }
+  genViewport: 'desktop',
   current: null,       // project being edited
   step: 1,
   viewport: 'desktop',
@@ -919,9 +402,7 @@ function defaultProject() {
     },
     content: {
       headline: '', regularPrice: '', promoPrice: '', ctaLabel: '', ctaUrl: '', colors: '', brandNotes: '',
-      productImageUrl: '', socialProof: '', tone: 'auto', notes: '', formulas: [],
-      brand: { primary: '', secondary: '', background: '', text: '' },
-      logoUrl: '', testimonials: [], gallery: [], stats: [], features: ['accordion'], popupText: ''
+      productImageUrl: '', socialProof: '', tone: 'auto', notes: '', formulas: []
     },
     sections: defaultSections('other'), sectionsCustomized: false,
     prompt: '', promptBase: '', promptEdited: false
@@ -948,26 +429,8 @@ function normalizeProject(raw) {
   (Array.isArray(p.sections) ? p.sections : []).forEach(function (s) {
     if (s && SECTION_BY_ID[s.id] && !seen[s.id]) { seen[s.id] = true; fixed.push({ id: s.id, enabled: !!s.enabled }); }
   });
-  SECTION_DEFS.forEach(function (d, di) {
-    if (seen[d.id]) return;
-    // Put a new section after the nearest earlier section that exists.
-    let at = 0;
-    for (let k = di - 1; k >= 0; k--) { const idx = fixed.map(function (x) { return x.id; }).indexOf(SECTION_DEFS[k].id); if (idx !== -1) { at = idx + 1; break; } }
-    fixed.splice(at, 0, { id: d.id, enabled: false });
-  });
+  SECTION_DEFS.forEach(function (d) { if (!seen[d.id]) fixed.push({ id: d.id, enabled: false }); });
   p.sections = fixed;
-  const c = p.content, T = function (v, n) { return cleanText(v, n); }, U = function (v) { const x = String(v == null ? '' : v).trim().slice(0, 600); return x; };
-  c.testimonials = (Array.isArray(c.testimonials) ? c.testimonials : []).filter(function (t) { return t && typeof t === 'object'; }).slice(0, MAX_TESTIMONIALS).map(function (t) {
-    return { name: T(t.name, 80), role: T(t.role, 100), text: String(t.text == null ? '' : t.text).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '').slice(0, 800), photoUrl: U(t.photoUrl), shotUrl: U(t.shotUrl) };
-  });
-  c.gallery = (Array.isArray(c.gallery) ? c.gallery : []).filter(function (g) { return g && typeof g === 'object'; }).slice(0, MAX_GALLERY).map(function (g) {
-    return { url: U(g.url), alt: T(g.alt, 140), kind: GALLERY_KIND_BY_ID[g.kind] ? g.kind : 'other' };
-  });
-  c.stats = (Array.isArray(c.stats) ? c.stats : []).filter(function (t) { return t && typeof t === 'object'; }).slice(0, MAX_STATS).map(function (t) {
-    return { label: T(t.label, 60), value: T(t.value, 12), type: t.type === 'progress' ? 'progress' : 'count' };
-  });
-  c.features = (Array.isArray(c.features) ? c.features : []).filter(function (id, i, a) { return FEATURE_BY_ID[id] && a.indexOf(id) === i; });
-  ['primary', 'secondary', 'background', 'text'].forEach(function (k) { const h = normHex(c.brand && c.brand[k]); c.brand[k] = h ? h.toLowerCase() : ''; });
   if (!Array.isArray(p.design.recommend.results)) p.design.recommend.results = [];
   p.design.recommend.results = p.design.recommend.results.filter(function (id) { return STYLE_BY_ID[id]; });
   if (p.design.styleId && !STYLE_BY_ID[p.design.styleId]) p.design.styleId = '';
@@ -997,6 +460,7 @@ function loadSettings() {
     const s = JSON.parse(raw);
     if (s && (s.platform === 'lynk' || s.platform === 'standard')) state.settings.platform = s.platform;
     if (s && (s.language === 'id' || s.language === 'en')) state.settings.language = s.language;
+    if (s && typeof s.geminiModel === 'string' && /^[A-Za-z0-9._-]{3,80}$/.test(s.geminiModel)) state.settings.geminiModel = s.geminiModel;
   } catch (e) { /* use defaults */ }
 }
 function saveSettings() {
@@ -1150,8 +614,7 @@ function secShell(id, ctx, title, body) {
     el('div', { class: 'pv-inner' },
       el('p', { class: 'pv-kicker' }, pad2(ctx.num)),
       el('h2', { class: 'pv-h2' }, title),
-      body,
-      galleryBlock(ctx, id)));
+      body));
 }
 
 function placeholderBlock(p, L, cls) {
@@ -1173,111 +636,6 @@ function heroVisual(p, L) {
     holder.append(placeholderBlock(p, L));
   }
   return el('div', { class: 'pv-hero-visual' }, holder);
-}
-
-/* ---------- features, images and numbers inside the mockup ---------- */
-/* How a chosen feature behaves on the current platform: 'off', 'simple' or 'full'. */
-function fxMode(p, id) {
-  const f = FEATURE_BY_ID[id];
-  if (!f || (p.content.features || []).indexOf(id) === -1) return 'off';
-  if (p.brief.platform !== 'lynk') return 'full';
-  return f.lynk === 'yes' ? 'full' : f.lynk === 'simpler' ? 'simple' : 'off';
-}
-function safeImg(url, alt, cls) {
-  const holder = el('div', { class: 'pv-figure ' + (cls || '') });
-  const img = el('img', { class: 'pv-img2', src: url, alt: alt || '', loading: 'lazy', referrerpolicy: 'no-referrer' });
-  img.addEventListener('error', function () { holder.textContent = ''; holder.append(el('span', { class: 'pv-imgfail' }, 'Image could not be loaded from this link')); });
-  holder.append(img);
-  return holder;
-}
-/* Extra images the user placed in this section. */
-function galleryBlock(ctx, secId) {
-  const items = (ctx.p.content.gallery || []).filter(function (g) { return GALLERY_KIND_BY_ID[g.kind] && GALLERY_KIND_BY_ID[g.kind].sec === secId && validUrl(g.url); });
-  if (!items.length) return null;
-  return el('div', { class: 'pv-gallery' }, items.map(function (g) { return safeImg(g.url, g.alt, ''); }));
-}
-function testimonialCard(t) {
-  const who = [t.name, t.role].filter(Boolean).join(', ');
-  return el('figure', { class: 'pv-tm' },
-    t.photoUrl && validUrl(t.photoUrl) ? el('div', { class: 'pv-tm-photo' }, safeImg(t.photoUrl, t.name ? 'Photo of ' + t.name : '', 'pv-avatar')) : null,
-    el('blockquote', { class: 'pv-tm-text' }, t.text),
-    who ? el('figcaption', { class: 'pv-tm-who' }, who) : null,
-    t.shotUrl && validUrl(t.shotUrl) ? safeImg(t.shotUrl, 'Screenshot of the original message', 'pv-shot') : null);
-}
-function numFmt(v) { const n = Number(String(v).replace(',', '.')); return isFinite(n) ? String(n) : String(v); }
-function statBlock(p, st, mode) {
-  if (st.type === 'progress') {
-    const pct = Math.max(0, Math.min(100, Number(st.value) || 0));
-    if (fxMode(p, 'progress') === 'off') return el('div', { class: 'pv-stat' }, el('span', { class: 'pv-stat-num' }, numFmt(st.value) + '%'), el('span', { class: 'pv-stat-label' }, st.label));
-    return el('div', { class: 'pv-stat pv-stat-bar' },
-      el('div', { class: 'pv-stat-row' }, el('span', { class: 'pv-stat-label' }, st.label), el('span', { class: 'pv-stat-pct' }, numFmt(pct) + '%')),
-      el('div', { class: 'pv-bar', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(pct), 'aria-label': st.label },
-        el('i', { style: 'width:' + pct + '%' })));
-  }
-  const num = el('span', { class: 'pv-stat-num pv-count', 'data-target': numFmt(st.value) }, numFmt(st.value));
-  return el('div', { class: 'pv-stat' }, num, el('span', { class: 'pv-stat-label' }, st.label));
-}
-
-/* Preview effects that need a little script. Timers are cleared on every re-render. */
-let fxTimers = [], fxObserver = null;
-function clearFx() {
-  fxTimers.forEach(function (t) { clearInterval(t); }); fxTimers = [];
-  if (fxObserver) { fxObserver.disconnect(); fxObserver = null; }
-}
-function activateFx(frame) {
-  clearFx();
-  const pv = $('.pv', frame); if (!pv) return;
-  const fx = (pv.dataset.fx || '').split(' ').filter(Boolean);
-  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const wantFade = fx.indexOf('fade') !== -1 && !reduce;
-  const counters = fx.indexOf('counter') !== -1 && !reduce ? $$('.pv-count', pv) : [];
-  if ((wantFade || counters.length) && typeof IntersectionObserver !== 'undefined') {
-    if (wantFade) pv.classList.add('fx-ready');
-    counters.forEach(function (c) { c.textContent = '0'; });
-    fxObserver = new IntersectionObserver(function (entries) {
-      entries.forEach(function (en) {
-        if (!en.isIntersecting) return;
-        const t = en.target; fxObserver.unobserve(t);
-        if (t.classList.contains('pv-count')) runCount(t); else t.classList.add('is-in');
-      });
-    }, { threshold: 0.15 });
-    if (wantFade) $$('.pv-sec', pv).forEach(function (s) { if (!s.classList.contains('pv-hero')) fxObserver.observe(s); });
-    counters.forEach(function (c) { fxObserver.observe(c); });
-  }
-  if (fx.indexOf('slider') !== -1 && !reduce) {
-    $$('.pv-track[data-auto]', pv).forEach(function (track) {
-      let paused = false;
-      ['pointerenter', 'focusin', 'touchstart'].forEach(function (ev) { track.addEventListener(ev, function () { paused = true; }); });
-      ['pointerleave', 'focusout'].forEach(function (ev) { track.addEventListener(ev, function () { paused = false; }); });
-      fxTimers.push(setInterval(function () {
-        if (paused || !track.isConnected || track.children.length < 2) return;
-        const step = track.children[0].getBoundingClientRect().width + 12, max = track.scrollWidth - track.clientWidth;
-        track.scrollTo({ left: track.scrollLeft + step > max + 2 ? 0 : track.scrollLeft + step, behavior: 'smooth' });
-      }, 4500));
-    });
-  }
-}
-function runCount(node) {
-  const target = parseFloat(node.dataset.target), dec = (node.dataset.target.split('.')[1] || '').length;
-  if (!isFinite(target)) { node.textContent = node.dataset.target; return; }
-  const t0 = performance.now(), dur = 1400;
-  (function tick(now) {
-    const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
-    node.textContent = (target * e).toFixed(dec);
-    if (k < 1) requestAnimationFrame(tick); else node.textContent = node.dataset.target;
-  })(t0);
-}
-function popupMock(p, L) {
-  const c = p.content, lynk = p.brief.platform === 'lynk';
-  const box = el('div', { class: 'pm' });
-  box.append(el('p', { class: 'pm-title' }, p.brief.productName.trim() || L.yourProduct));
-  if (c.popupText.trim()) box.append(el('p', null, c.popupText.trim()));
-  else box.append(el('p', { class: 'pm-note' }, 'No text entered. The pop-up will carry only the offer summary and the button.'));
-  const price = c.promoPrice.trim() || c.regularPrice.trim();
-  if (price) box.append(el('p', { class: 'pm-price' }, price));
-  box.append(el('span', { class: 'pm-btn' }, ctaLabel(p, L)));
-  if (lynk) box.append(el('p', { class: 'pm-note' }, 'On Lynk.id this becomes a tap-to-open panel inside the page, not a real overlay.'));
-  return box;
 }
 
 const SECTION_RENDER = {
@@ -1327,29 +685,11 @@ const SECTION_RENDER = {
     return secShell('included', ctx, ctx.L.sec.included, el('div', null, el('ul', { class: 'pv-checks' }, items), el('p', { class: 'pv-note' }, ctx.L.placeholder)));
   },
   proof: function (ctx) {
-    const c = ctx.p.content, t = c.socialProof.trim(), tms = c.testimonials.filter(function (x) { return x.text.trim(); });
-    const kids = [];
-    if (tms.length) {
-      const mode = fxMode(ctx.p, 'slider');
-      if (mode !== 'off' && tms.length > 1) {
-        kids.push(el('div', { class: 'pv-track', tabindex: '0', role: 'group', 'aria-label': 'Testimonials', 'data-auto': mode === 'full' ? '1' : null },
-          tms.map(function (x) { return el('div', { class: 'pv-slide' }, testimonialCard(x)); })));
-        kids.push(el('p', { class: 'pv-note' }, mode === 'full' ? 'Slides by itself every few seconds and pauses on touch or hover.' : 'Swipe row (no auto-advance on Lynk.id).'));
-      } else {
-        kids.push(el('div', { class: 'pv-tms' }, tms.map(testimonialCard)));
-      }
-    }
-    if (t) kids.push(el('div', { class: 'pv-copy pv-quote' }, t.split(/\r?\n/).filter(Boolean).map(function (x) { return el('p', null, x); })));
-    if (tms.length || t) kids.push(el('p', { class: 'pv-note' }, ctx.L.provided));
-    else kids.push(el('div', { class: 'pv-copy' }, skel(['88%', '64%']), el('p', { class: 'pv-note' }, ctx.L.noProof)));
-    return secShell('proof', ctx, ctx.L.sec.proof, el('div', null, kids));
-  },
-  numbers: function (ctx) {
-    const st = ctx.p.content.stats.filter(function (x) { return x.label.trim() && x.value.trim(); });
-    const body = st.length
-      ? el('div', { class: 'pv-stats' }, st.map(function (x) { return statBlock(ctx.p, x); }))
-      : el('div', { class: 'pv-copy' }, skel(['60%', '40%']), el('p', { class: 'pv-note' }, 'No real numbers entered. Add them in Content, or switch this section off.'));
-    return secShell('numbers', ctx, ctx.L.sec.numbers, body);
+    const t = ctx.p.content.socialProof.trim();
+    const body = t
+      ? el('div', { class: 'pv-copy pv-quote' }, t.split(/\r?\n/).filter(Boolean).map(function (x) { return el('p', null, x); }), el('p', { class: 'pv-note' }, ctx.L.provided))
+      : el('div', { class: 'pv-copy' }, skel(['88%', '64%']), el('p', { class: 'pv-note' }, ctx.L.noProof));
+    return secShell('proof', ctx, ctx.L.sec.proof, body);
   },
   offer: function (ctx) {
     const c = ctx.p.content, price = el('div', { class: 'pv-price' });
@@ -1363,15 +703,8 @@ const SECTION_RENDER = {
     return secShell('bonus', ctx, ctx.L.sec.bonus, el('div', null, el('ul', { class: 'pv-checks' }, items), el('p', { class: 'pv-note' }, ctx.L.placeholder)));
   },
   faq: function (ctx) {
-    const acc = fxMode(ctx.p, 'accordion') !== 'off';
-    const rows = [['72%'], ['58%'], ['66%']].map(function (w, i) {
-      if (!acc) return el('div', { class: 'pv-faq-row' }, skel(w), el('i', { class: 'pv-plus' }));
-      const ans = el('div', { class: 'pv-faq-a', id: 'pv-a' + i, hidden: true }, skel(['90%', '70%']));
-      const btn = el('button', { type: 'button', class: 'pv-faq-row pv-faq-btn', 'aria-expanded': 'false', 'aria-controls': 'pv-a' + i }, skel(w), el('i', { class: 'pv-plus' }));
-      btn.addEventListener('click', function () { const open = btn.getAttribute('aria-expanded') === 'true'; btn.setAttribute('aria-expanded', String(!open)); ans.hidden = open; btn.classList.toggle('is-open', !open); });
-      return el('div', { class: 'pv-faq-item' }, btn, ans);
-    });
-    return secShell('faq', ctx, ctx.L.sec.faq, el('div', null, el('div', { class: 'pv-faq' }, rows), el('p', { class: 'pv-note' }, ctx.L.placeholder + (acc ? ' Tap a question to try the accordion.' : ''))));
+    const rows = [['72%'], ['58%'], ['66%']].map(function (w) { return el('div', { class: 'pv-faq-row' }, skel(w), el('i', { class: 'pv-plus' })); });
+    return secShell('faq', ctx, ctx.L.sec.faq, el('div', null, el('div', { class: 'pv-faq' }, rows), el('p', { class: 'pv-note' }, ctx.L.placeholder)));
   },
   final: function (ctx) {
     const p = ctx.p;
@@ -1382,30 +715,6 @@ const SECTION_RENDER = {
   }
 };
 
-/* Recipe-driven styling: only whitelisted values become CSS variables or data attributes. */
-const RECIPE_CSS = {
-  radius:  { none: ['0px', '0px'], sm: ['4px', '3px'], md: ['10px', '8px'], lg: ['20px', '14px'], pill: ['28px', '14px'] },
-  border:  { none: 0, thin: 1, medium: 2, thick: 3 },
-  shadow:  { none: 'none', soft: '0 12px 32px rgba(0,0,0,.14)', hard: '6px 6px 0 var(--ink)', dual: '9px 9px 18px rgba(0,0,0,.16), -9px -9px 18px rgba(255,255,255,.75)' },
-  weight:  { light: 300, regular: 400, bold: 700, black: 900 },
-  caps:    { normal: 'none', upper: 'uppercase' },
-  density: { tight: 0.75, normal: 1, airy: 1.35 }
-};
-function applyRecipe(pv, style) {
-  const r = style.recipe;
-  if (!r) return;
-  const bw = RECIPE_CSS.border[r.border] || 0;
-  pv.classList.add('is-recipe');
-  pv.dataset.hero = r.hero; pv.dataset.list = r.list; pv.dataset.sec = r.sections; pv.dataset.btn = r.button;
-  const v = {
-    '--rad': RECIPE_CSS.radius[r.radius][0], '--bnr': RECIPE_CSS.radius[r.radius][1],
-    '--bw': bw + 'px', '--bc': bw >= 2 ? 'var(--ink)' : 'var(--line)', '--bcb': bw >= 2 ? 'var(--ink)' : 'var(--accent)',
-    '--shd': RECIPE_CSS.shadow[r.shadow], '--hw': String(RECIPE_CSS.weight[r.weight]),
-    '--htf': RECIPE_CSS.caps[r.caps], '--pads': String(RECIPE_CSS.density[r.density])
-  };
-  Object.keys(v).forEach(function (k) { pv.style.setProperty(k, v[k]); });
-}
-
 /* Builds the full mockup element. opts: { style, thumb, only } */
 function renderLanding(p, opts) {
   opts = opts || {};
@@ -1413,26 +722,19 @@ function renderLanding(p, opts) {
   const L = L10N[p.brief.language] || L10N.en;
   const wrap = el('div', { class: 'pv-wrap' });
   const pv = el('div', { class: 'pv s-' + style.id + (opts.thumb ? ' is-thumb' : '') });
-  const res = resolvePalette(p, style), pal = res.pal;
-  const lightBg = luminance(pal.bg) > 0.4;
+  const pal = Object.assign({}, style.palette);
+  const hex = parseHex(p.content.colors);
+  if (hex[0]) pal.accent = hex[0];
+  if (hex[1]) pal.accent2 = hex[1];
   const vars = {
     '--bg': pal.bg, '--surface': pal.surface, '--ink': pal.ink, '--muted': pal.muted, '--line': pal.line,
     '--accent': pal.accent, '--accent2': pal.accent2, '--on-accent': readable(pal.accent), '--on-accent2': readable(pal.accent2),
-    '--accent-ink': pal.accentInk, '--accent2-ink': pal.accent2Ink, '--on-ink': readable(pal.ink),
-    '--card': lightBg ? mixHex(pal.bg, '#ffffff', 0.7) : pal.surface,
-    '--tint': mixHex(pal.bg, pal.accent, lightBg ? 0.14 : 0.22), '--tint2': mixHex(pal.bg, pal.accent2, lightBg ? 0.2 : 0.26),
-    '--display': stackOf(style.fonts.display), '--body': stackOf(style.fonts.body)
+    '--display': style.fonts.display, '--body': style.fonts.body
   };
-  const fxOn = (p.content.features || []).filter(function (id) { return fxMode(p, id) === 'full'; });
-  if (fxOn.length && !opts.thumb) pv.dataset.fx = fxOn.join(' ');
   Object.keys(vars).forEach(function (k) { pv.style.setProperty(k, vars[k]); });
-  applyRecipe(pv, style);
 
   if (!opts.thumb) {
-    const logo = p.content.logoUrl.trim();
-    pv.append(el('header', { class: 'pv-top' },
-      logo && validUrl(logo) ? safeImg(logo, (p.brief.productName.trim() || L.yourProduct) + ' logo', 'pv-logo') : el('span', { class: 'pv-brand' }, p.brief.productName.trim() || L.yourProduct),
-      el('span', { class: 'pv-rule-dot' })));
+    pv.append(el('header', { class: 'pv-top' }, el('span', { class: 'pv-brand' }, p.brief.productName.trim() || L.yourProduct), el('span', { class: 'pv-rule-dot' })));
   }
   const ids = opts.only || p.sections.filter(function (s) { return s.enabled; }).map(function (s) { return s.id; });
   let num = 0;
@@ -1442,9 +744,6 @@ function renderLanding(p, opts) {
     pv.append(SECTION_RENDER[id]({ p: p, L: L, style: style, num: num || 1 }));
   });
   if (!ids.length) pv.append(el('section', { class: 'pv-sec' }, el('p', { class: 'pv-note' }, 'No sections are switched on. Go to the Page Planner to enable some.')));
-  if (!opts.thumb && fxMode(p, 'floating') !== 'off') {
-    pv.append(el('div', { class: 'pv-float' }, el('span', { class: 'pv-btn' }, ctaLabel(p, L))));
-  }
   wrap.append(pv);
   return wrap;
 }
@@ -1498,15 +797,7 @@ function buildPrompt(p) {
   const lang = b.language === 'id' ? 'Indonesian (Bahasa Indonesia)' : 'English';
   const enabled = p.sections.filter(function (s) { return s.enabled; }).map(function (s) { return SECTION_BY_ID[s.id]; });
   const disabled = p.sections.filter(function (s) { return !s.enabled; }).map(function (s) { return SECTION_BY_ID[s.id].name; });
-  const res = resolvePalette(p, style), pal = res.pal;
-  const feats = (c.features || []).map(function (id) { return FEATURE_BY_ID[id]; }).filter(Boolean);
-  const usable = feats.filter(function (f) { return fxMode(p, f.id) !== 'off'; });
-  const dropped = feats.filter(function (f) { return fxMode(p, f.id) === 'off'; });
-  const needJs = !lynk && usable.some(function (f) { return JS_FEATURES.indexOf(f.id) !== -1; });
-  const testimonials = c.testimonials.filter(function (t) { return t.text.trim(); });
-  const gallery = c.gallery.filter(function (g) { return validUrl(g.url); });
-  const stats = c.stats.filter(function (x) { return x.label.trim() && x.value.trim(); });
-  const hasProof = !!(c.socialProof.trim() || testimonials.length);
+  const hexes = parseHex(c.colors);
   const NA = 'Not provided. Do not invent it.';
   const out = [];
   const H = function (t) { out.push('', '## ' + t, ''); };
@@ -1561,25 +852,13 @@ function buildPrompt(p) {
   H('5. Visual system requirements');
   out.push('Let this style drive the composition, typography, shapes and spacing. Do not start from a generic template and recolor it.');
   out.push('');
-  const srcTag = function (k) { return res.src[k] === 'brand' ? '' : res.src[k] === 'style' ? ' [style default]' : ' [' + srcText(res.src[k]) + ']'; };
-  if (res.hasBrand) {
-    out.push('- BRAND COLORS (mine, they override the style\'s default palette; use exactly these hex values for the page):');
-    out.push('  - Background: ' + pal.bg.toUpperCase() + srcTag('bg'));
-    out.push('  - Surface (cards, bands): ' + pal.surface.toUpperCase() + srcTag('surface'));
-    out.push('  - Text: ' + pal.ink.toUpperCase() + srcTag('ink') + '; muted text: ' + pal.muted.toUpperCase() + srcTag('muted') + '; lines: ' + pal.line.toUpperCase() + srcTag('line'));
-    out.push('  - Main accent (primary button, key highlights): ' + pal.accent.toUpperCase() + srcTag('accent') + '; text on it: ' + readable(pal.accent).toUpperCase());
-    out.push('  - Second accent: ' + pal.accent2.toUpperCase() + srcTag('accent2') + '; text on it: ' + readable(pal.accent2).toUpperCase());
-    out.push('  - When the main accent is used as TEXT on the background, use ' + pal.accentInk.toUpperCase() + ' so it stays readable.');
-    if (c.colors.trim()) out.push('  - How I described them: "' + c.colors.trim() + '".');
-    out.push('  - Do not reuse the style\'s own default colors anywhere; take the style only for type, shape, spacing and layout. Keep text contrast at WCAG AA (4.5:1) or better.');
-  } else {
-    out.push('- Suggested palette: background ' + pal.bg + ', surface ' + pal.surface + ', text ' + pal.ink + ', muted text ' + pal.muted +
-      ', lines ' + pal.line + ', main accent ' + pal.accent + ', secondary accent ' + pal.accent2 + '.');
-    if (c.colors.trim()) out.push('- Brand colors I described: "' + c.colors.trim() + '". I could not turn them into exact codes here, so translate them into suitable hex values yourself, use them in place of the suggested palette, and keep text contrast at WCAG AA or better.');
-    else out.push('- Brand colors: none supplied. Use the suggested palette.');
-  }
+  out.push('- Suggested palette: background ' + style.palette.bg + ', surface ' + style.palette.surface + ', text ' + style.palette.ink + ', muted text ' + style.palette.muted +
+    ', lines ' + style.palette.line + ', main accent ' + style.palette.accent + ', secondary accent ' + style.palette.accent2 + '.');
+  if (hexes.length) out.push('- Brand colors I supplied: ' + hexes.join(', ') + '. These take priority for accent roles. Keep body text contrast at WCAG AA (4.5:1) or better.');
+  else if (c.colors.trim()) out.push('- Brand colors I described: ' + c.colors.trim() + '. Translate them into suitable hex values and keep text contrast at WCAG AA or better.');
+  else out.push('- Brand colors: none supplied. Use the suggested palette.');
   out.push('- Typography: ' + style.typography);
-  out.push('- Font stack: ' + stackOf(style.fonts.display) + ' for headings; ' + stackOf(style.fonts.body) + ' for body. Use these system font stacks only, with no web-font downloads.');
+  out.push('- Font stack: ' + style.fonts.display + ' for headings; ' + style.fonts.body + ' for body. Use these system font stacks only, with no web-font downloads.');
   out.push('- Layout: ' + style.layout);
   out.push('- Components and borders: ' + style.components);
   out.push('- Image treatment: ' + style.image);
@@ -1618,13 +897,8 @@ function buildPrompt(p) {
   } else {
     out.push('- Pricing: no price was provided. Do not show or invent any price or discount. If an offer section exists, describe the offer without numbers and point to the CTA.');
   }
-  if (testimonials.length) out.push('- Real testimonials: ' + testimonials.length + ' supplied in section 9. Use them word for word (only light formatting), never add, merge or embellish them.');
-  if (c.socialProof.trim()) out.push('- Other real proof to use exactly as written (only light formatting allowed):\n' + c.socialProof.trim().split(/\r?\n/).map(function (x) { return '  > ' + x; }).join('\n'));
-  if (!hasProof) out.push('- Social proof: none supplied. Do not write testimonials, reviews, customer counts or ratings. Omit the section or use truthful alternatives such as the product contents or the process.');
-  if (stats.length) {
-    out.push('- Real numbers I supplied (use exactly these, never round up, extend or add others):');
-    stats.forEach(function (x) { out.push('  - ' + x.label.trim() + ': ' + x.value.trim() + (x.type === 'progress' ? '% (progress bar)' : ' (counting number)')); });
-  } else out.push('- Numbers: none supplied. Do not invent statistics, customer counts, ratings, percentages or progress figures.');
+  if (c.socialProof.trim()) out.push('- Real social proof to use exactly as written (only light formatting allowed):\n' + c.socialProof.trim().split(/\r?\n/).map(function (x) { return '  > ' + x; }).join('\n'));
+  else out.push('- Social proof: none supplied. Do not write testimonials, reviews, customer counts or ratings. Omit the section or use truthful alternatives such as the product contents or the process.');
   out.push('- Never invent: testimonials, customer counts, prices, discounts, guarantees, certifications, results, scarcity or urgency claims, deadlines, or any business fact not stated here.');
   line('Additional notes from me', c.notes, 'None.');
 
@@ -1644,45 +918,18 @@ function buildPrompt(p) {
   } else {
     out.push('Target: a standard website I will host or open locally.');
     out.push('');
-    out.push('- Deliver complete HTML and CSS' + (needJs ? ' (plus JavaScript for the listed features)' : '') + (b.outputFormat === 'single' ? ' in ONE single HTML file with the CSS inside a <style> tag' + (needJs ? ' and the JavaScript inside a <script> tag.' : '.') : (needJs ? ' as three files: index.html, styles.css and script.js, linked with <link rel="stylesheet" href="styles.css"> and <script src="script.js" defer></script>.' : ' as two files: index.html and styles.css, linked with <link rel="stylesheet" href="styles.css">.')));
+    out.push('- Deliver complete HTML and CSS' + (b.outputFormat === 'single' ? ' in ONE single HTML file with the CSS inside a <style> tag.' : ' as two files: index.html and styles.css, linked with <link rel="stylesheet" href="styles.css">.'));
     out.push('- Semantic HTML: header, main, section with headings in logical order, footer. One h1 only.');
     out.push('- Responsive, mobile-first layout with min-width media queries. No horizontal scrolling at any width.');
-    out.push('- Minimal dependencies: no frameworks, no CSS libraries, no build step. ' + (needJs ? 'JavaScript is allowed ONLY for the features listed below: plain vanilla JavaScript, no libraries, ' + (b.outputFormat === 'single' ? 'in one <script> before </body>.' : 'in script.js loaded with <script src="script.js" defer></script>.') + ' The page must still read and work without it.' : 'No JavaScript unless strictly needed (use <details> for the FAQ).'));
+    out.push('- Minimal dependencies: no frameworks, no CSS libraries, no build step. No JavaScript unless strictly needed (use <details> for the FAQ).');
     out.push('- Use CSS custom properties for colors and spacing so I can edit them easily. Include visible focus styles and respect prefers-reduced-motion.');
-    out.push('- ' + (b.outputFormat === 'single' ? 'A single file is preferred so I can save and open it immediately.' : 'Keep the file structure to exactly these files: ' + (needJs ? 'index.html, styles.css and script.js.' : 'index.html and styles.css.')));
+    out.push('- ' + (b.outputFormat === 'single' ? 'A single file is preferred so I can save and open it immediately.' : 'Keep the file structure to exactly those two files.'));
   }
-
-  out.push('');
-  out.push('Page features and effects (these are the ONLY animated or interactive elements allowed' + (lynk ? ' on Lynk.id' : '') + '):');
-  if (!feats.length) out.push('- None requested. Keep the page static and calm.');
-  usable.forEach(function (f) { out.push('- ' + (lynk ? f.lynkUse : f.stdUse)); });
-  if (dropped.length) out.push('- Left out on purpose because Lynk.id cannot do them with inline CSS only: ' + dropped.map(function (f) { return f.name; }).join(', ') + '. Do not try to imitate them.');
-  if (usable.some(function (f) { return f.id === 'popup'; })) {
-    out.push('- Pop-up content: ' + (c.popupText.trim() ? '"' + c.popupText.trim() + '" (use exactly), plus the offer summary and primary CTA.' : 'only the offer summary and the primary CTA, with nothing invented.'));
-  }
-  if (usable.length) out.push('- All effects are decoration only: no fake urgency, no fake live counters, no content that is available only through an effect.');
 
   /* 9 */
   H('9. Asset and image requirements');
-  if (c.logoUrl.trim()) out.push('- Logo: use this URL in the page header or hero, at most 44px tall, with alt text "' + (b.productName.trim() || 'logo') + ' logo": ' + c.logoUrl.trim());
-  else out.push('- Logo: none supplied. Use the business name as plain text; do not draw a logo.');
   if (c.productImageUrl.trim()) out.push('- Product image: use this URL in the hero or main visual with descriptive alt text: ' + c.productImageUrl.trim());
   else out.push('- Product image: none supplied. Use a typography-led composition or simple CSS/inline shapes. Do not insert unrelated stock photos or hotlink random images.');
-  if (testimonials.length) {
-    out.push('- Testimonials (real, use exactly as given in the social proof section):');
-    testimonials.forEach(function (t, i) {
-      out.push('  ' + (i + 1) + '. "' + t.text.trim().replace(/\s*\r?\n\s*/g, ' ') + '"' + (t.name || t.role ? ' by ' + [t.name, t.role].filter(Boolean).join(', ') : ' (no name given: do not add one)') +
-        (validUrl(t.photoUrl) ? ' | photo: ' + t.photoUrl : ' | no photo: show no avatar and do not use a placeholder person') + (validUrl(t.shotUrl) ? ' | screenshot of the original message: ' + t.shotUrl : ''));
-    });
-  }
-  if (gallery.length) {
-    out.push('- Extra images (use each one once, in the section named):');
-    gallery.forEach(function (g) {
-      const k = GALLERY_KIND_BY_ID[g.kind] || GALLERY_KIND_BY_ID.other;
-      out.push('  - ' + g.url + ' (' + k.label.toLowerCase() + ') goes in the ' + k.secName + ' section' + (g.alt ? '; alt text: "' + g.alt + '"' : '; write short alt text') + '. If that section is not on the page, put it in the nearest relevant one.');
-    });
-  }
-  if (testimonials.length || gallery.length || c.logoUrl.trim() || c.productImageUrl.trim()) out.push('- Use ONLY the image links given in this section. Do not add, generate or hotlink any other image.');
   out.push('- Every image needs meaningful alt text, width: 100%, max-width: 100% and height: auto so it never overflows.');
   out.push('- Do not use logos, photos or illustrations that I have not provided.');
   if (d.mode === 'reference' && d.referenceImageName) out.push('- The reference screenshot is for visual guidance only; do not embed it in the page.');
@@ -1709,17 +956,15 @@ function buildPrompt(p) {
   out.push('- [ ] No invented testimonials, numbers, prices, guarantees, certifications or urgency.');
   out.push('- [ ] Text contrast is at least 4.5:1 and the CTA stands out.');
   out.push('- [ ] No horizontal overflow at 320px.');
-  out.push('- [ ] The page uses my brand colors from section 5' + (res.hasBrand ? ' and none of the style\'s default colors.' : ' (or the suggested palette if none were given).'));
-  if (feats.length) out.push('- [ ] Only the effects listed in section 8 exist, and each one works as described' + (lynk ? ' without any script or style block.' : ', with prefers-reduced-motion respected.'));
   out.push(lynk ? '- [ ] 100% inline CSS, no <style>, no <script>, no keyframes, width limit ' + maxW + ' is applied.' :
-    '- [ ] HTML is semantic, files match the requested structure, and JavaScript is ' + (needJs ? 'limited to the listed features.' : 'not used.'));
+    '- [ ] HTML is semantic, files match the requested structure, and there is no unnecessary JavaScript.');
 
   /* 12 */
   H('12. Required output format');
   out.push('1. One short line naming the design direction you used.');
   if (lynk) out.push('2. The complete HTML in a single code block (language: html). Nothing outside the code block is part of the page.');
   else if (b.outputFormat === 'single') out.push('2. The complete single-file HTML in one code block (language: html).');
-  else out.push('2. ' + (needJs ? 'Three code blocks, each labeled with its filename: index.html, styles.css and script.js.' : 'Two code blocks, each labeled with its filename: index.html and styles.css.'));
+  else out.push('2. Two code blocks, each labeled with its filename: index.html and styles.css.');
   out.push('3. A short list of any placeholders I must replace, such as links, prices or facts marked [to be confirmed].');
   out.push('4. The installation steps from section 13.');
   out.push('Do not add long explanations before or after the code.');
@@ -1743,7 +988,7 @@ function buildPrompt(p) {
     out.push('2. Double-click the file to open it in your browser.');
     out.push('3. To publish, upload the file to any static hosting service.');
   } else {
-    out.push('1. Create a new folder and save the ' + (needJs ? 'three files' : 'two files') + ' in it with the exact names ' + (needJs ? 'index.html, styles.css and script.js.' : 'index.html and styles.css.'));
+    out.push('1. Create a new folder and save the two files in it with the exact names index.html and styles.css.');
     out.push('2. Double-click index.html to open it in your browser.');
     out.push('3. To publish, upload the whole folder to any static hosting service.');
   }
@@ -1757,180 +1002,306 @@ function buildPrompt(p) {
    ===================================================================== */
 
 /* =====================================================================
-   STEP 3 EXTRAS: brand colors, images, numbers, page features
+   6b. GEMINI (optional)
+   The user pastes their OWN Google AI Studio API key. It is kept in
+   sessionStorage by default (gone when the tab closes), or in
+   LocalStorage only if the user ticks "remember". It is never stored
+   inside a project and is only sent to generativelanguage.googleapis.com.
    ===================================================================== */
-const BRAND_ROLES = [['primary', 'Main accent', 'accent'], ['secondary', 'Second accent', 'accent2'], ['background', 'Background', 'bg'], ['text', 'Text', 'ink']];
 
-function currentResolved() { const p = state.current; return resolvePalette(p, getStyle(resolveStyleId(p))); }
+function sessionGet(key) { try { return window.sessionStorage.getItem(key); } catch (e) { return null; } }
+function sessionSet(key, val) { try { window.sessionStorage.setItem(key, val); return true; } catch (e) { return false; } }
+function sessionRemove(key) { try { window.sessionStorage.removeItem(key); } catch (e) { /* ignore */ } }
 
-function renderBrandPickers() {
-  const p = state.current, box = $('#brand-pickers'); box.textContent = '';
-  const res = currentResolved();
-  BRAND_ROLES.forEach(function (r) {
-    const id = 'bp-' + r[0], set = !!normHex(p.content.brand[r[0]]);
-    const inp = el('input', { type: 'color', id: id, value: (set ? lc(normHex(p.content.brand[r[0]])) : res.pal[r[2]]) });
-    const auto = el('button', { type: 'button', class: 'btn btn-small btn-quiet', id: id + '-auto', disabled: !set }, 'Use auto');
-    inp.addEventListener('input', function () {
-      p.content.brand[r[0]] = lc(inp.value); auto.disabled = false; renderBrandResolved(); scheduleSave();
-    });
-    auto.addEventListener('click', function () {
-      p.content.brand[r[0]] = ''; auto.disabled = true; refreshPickerValues(); renderBrandResolved(); scheduleSave(); inp.focus();
-    });
-    box.append(el('div', { class: 'bp' }, el('label', { for: id }, r[1]), inp, auto));
-  });
-  renderBrandResolved();
-}
-/* Unset pickers follow the resolved palette so they always show what the preview uses. */
-function refreshPickerValues() {
-  const p = state.current; if (!p) return;
-  const res = currentResolved();
-  BRAND_ROLES.forEach(function (r) {
-    const inp = $('#bp-' + r[0]); if (!inp) return;
-    if (!normHex(p.content.brand[r[0]])) inp.value = res.pal[r[2]];
-  });
-}
-function renderBrandResolved() {
-  const p = state.current, box = $('#brand-resolved'); if (!box || !p) return;
-  box.textContent = '';
-  const res = currentResolved();
-  if (p.content.colors.trim()) {
-    if (res.found.length) {
-      box.append(el('p', { class: 'small' }, el('strong', null, 'Read from your text: '),
-        res.found.map(function (c, i) { return (i ? ', ' : '') + c.label + ' → ' + c.hex.toUpperCase(); }).join('')));
-    } else {
-      box.append(el('p', { class: 'small brand-warn' }, 'No known color name or hex code was found in your text, so the style\'s own colors are used. Try names like "biru muda, orange, putih" or hex codes like #5BC0EB, or use the pickers.'));
-    }
+function loadGemini() {
+  const g = state.gemini;
+  const raw = storageGet(KEYS.gemini);
+  if (raw) {
+    try { const o = JSON.parse(raw); if (o && typeof o.key === 'string' && o.key) { g.key = o.key; g.remember = true; return; } } catch (e) { /* fall through */ }
   }
-  const roles = [['bg', 'Background'], ['surface', 'Surface'], ['ink', 'Text'], ['accent', 'Main accent'], ['accent2', 'Second accent']];
-  const ul = el('ul', { class: 'swatches' });
-  roles.forEach(function (r) {
-    ul.append(el('li', null, el('span', { class: 'sw', style: 'background:' + res.pal[r[0]] }), el('span', null, el('strong', null, r[1]), ' ', res.pal[r[0]].toUpperCase(), el('small', null, ' ' + srcText(res.src[r[0]])))));
-  });
-  box.append(ul);
+  const s = sessionGet(GEMINI_SESSION_KEY);
+  if (s) g.key = s;
+}
+function saveGemini() {
+  const g = state.gemini;
+  if (g.key && g.remember) {
+    if (!storageSet(KEYS.gemini, JSON.stringify({ key: g.key }))) {
+      g.remember = false; sessionSet(GEMINI_SESSION_KEY, g.key);
+      setKeyStatus('Could not save the key in this browser. It is kept for this tab only.', 'error');
+    } else sessionRemove(GEMINI_SESSION_KEY);
+  } else {
+    storageRemove(KEYS.gemini);
+    if (g.key) sessionSet(GEMINI_SESSION_KEY, g.key); else sessionRemove(GEMINI_SESSION_KEY);
+  }
+}
+function wipeGemini() {
+  const g = state.gemini;
+  g.key = ''; g.remember = false; g.models = []; g.status = { msg: '', kind: 'info' };
+  storageRemove(KEYS.gemini); sessionRemove(GEMINI_SESSION_KEY);
 }
 
-/* ---- generic repeater (testimonials, images, numbers) ---- */
-function renderRepeater(o) {
-  const p = state.current, list = p.content[o.key], box = $(o.box); box.textContent = '';
-  list.forEach(function (item, i) {
-    const row = el('div', { class: 'rep-item' }, el('p', { class: 'rep-head' }, el('strong', null, o.noun + ' ' + (i + 1))));
-    const grid = el('div', { class: 'form-grid inner-grid' });
-    o.fields.forEach(function (f) {
-      const id = 'f-content-' + o.key + '-' + i + '-' + f.key;
-      let ctl;
-      if (f.type === 'select') {
-        ctl = el('select', { id: id }, f.options.map(function (op) { return el('option', { value: op[0] }, op[1]); }));
-      } else if (f.type === 'textarea') {
-        ctl = el('textarea', { id: id, rows: '3', placeholder: f.ph || '' });
-      } else {
-        ctl = el('input', { id: id, type: f.type || 'text', placeholder: f.ph || '', autocomplete: 'off', inputmode: f.type === 'url' ? 'url' : (f.type === 'number' ? 'decimal' : null) });
-      }
-      ctl.value = item[f.key] == null ? '' : item[f.key];
-      const handler = function () {
-        item[f.key] = ctl.value; ctl.removeAttribute('aria-invalid');
-        const m = $('#e-content-' + o.key + '-' + i + '-' + f.key); if (m) m.hidden = true;
-        if (o.after) o.after();
-        scheduleSave();
-      };
-      ctl.addEventListener('input', handler); ctl.addEventListener('change', handler);
-      grid.append(el('div', { class: 'field' + (f.wide ? ' full' : '') }, el('label', { for: id }, f.label), ctl,
-        f.hint ? el('p', { class: 'hint' }, f.hint) : null, el('p', { class: 'field-error', id: 'e-content-' + o.key + '-' + i + '-' + f.key, hidden: true })));
+/* ---- network ---- */
+function geminiError(status, data) {
+  const raw = data && data.error && data.error.message ? String(data.error.message) : '';
+  let msg;
+  if (status === 400 && /api key/i.test(raw)) msg = 'Google says the API key is not valid. Copy it again from Google AI Studio.';
+  else if (status === 400) msg = 'Google rejected the request: ' + clip(raw, 220);
+  else if (status === 401 || status === 403) {
+    msg = /leak/i.test(raw) ? 'Google disabled this key because it was reported as leaked. Create a new key in Google AI Studio.'
+      : 'Google refused this key. Check that it is active, that the Gemini API is allowed for it, and that your region is supported.';
+  }
+  else if (status === 404) msg = 'That model is not available for this key. Choose another model.';
+  else if (status === 429) msg = 'Quota or rate limit reached. Wait a minute, or choose a lighter Flash model. Free-tier limits are small.';
+  else if (status >= 500) msg = 'Gemini is overloaded or temporarily unavailable. Try again in a moment.';
+  else msg = 'Gemini returned an error (' + status + '). ' + clip(raw, 220);
+  const err = new Error(msg); err.status = status; return err;
+}
+
+async function geminiRequest(url, init, key, signal) {
+  let res;
+  try {
+    res = await fetch(url, Object.assign({}, init, { headers: Object.assign({ 'x-goog-api-key': key }, init.headers || {}), signal: signal }));
+  } catch (e) {
+    if (e && e.name === 'AbortError') throw e;
+    throw new Error('Could not reach Google. Check your internet connection or any ad blocker, then try again.');
+  }
+  let data = null;
+  try { data = await res.json(); } catch (e) { data = null; }
+  if (!res.ok) throw geminiError(res.status, data);
+  return data || {};
+}
+
+async function listGeminiModels(key, signal) {
+  const ids = []; let token = '', pages = 0;
+  do {
+    const url = GEMINI_BASE + 'models?pageSize=100' + (token ? '&pageToken=' + encodeURIComponent(token) : '');
+    const data = await geminiRequest(url, { method: 'GET' }, key, signal);
+    (data.models || []).forEach(function (m) {
+      if ((m.supportedGenerationMethods || []).indexOf('generateContent') === -1) return;
+      const id = String(m.name || '').replace(/^models\//, '');
+      if (!/^gemini-/.test(id)) return;
+      if (/embedding|tts|image|live|audio|robotics|computer-use|native|imagen|veo/.test(id)) return;
+      if (ids.indexOf(id) === -1) ids.push(id);
     });
-    row.append(grid, el('p', null, el('button', { type: 'button', class: 'btn btn-small btn-quiet btn-danger-text', 'aria-label': 'Remove ' + o.noun + ' ' + (i + 1),
-      onclick: function () { list.splice(i, 1); if (o.after) o.after(); scheduleSave(); renderRepeater(o); const a = $(o.addBtn); if (a) a.focus(); toast(o.noun + ' removed.', 'ok', 1500); } }, 'Remove')));
-    box.append(row);
+    token = data.nextPageToken || ''; pages++;
+  } while (token && pages < 5);
+  ids.sort(function (a, b) {
+    const la = /-latest$/.test(a), lb = /-latest$/.test(b);
+    if (la !== lb) return la ? -1 : 1;
+    return a < b ? 1 : a > b ? -1 : 0;
   });
-  const add = $(o.addBtn); if (add) add.disabled = list.length >= o.max;
-  if (!list.length) box.append(el('p', { class: 'muted small' }, o.empty));
-}
-let REP = null;
-function repDefs() {
-  if (REP) return REP;
-  REP = {
-    tm: { key: 'testimonials', box: '#tm-list', addBtn: '#tm-add', noun: 'Testimonial', max: MAX_TESTIMONIALS, empty: 'No testimonials yet. Only add real ones.',
-      blank: function () { return { name: '', role: '', text: '', photoUrl: '', shotUrl: '' }; },
-      fields: [
-        { key: 'text', label: 'What the customer said (exact words)', type: 'textarea', wide: true },
-        { key: 'name', label: 'Name (as they allow)', ph: 'e.g. Sinta' },
-        { key: 'role', label: 'Role or place (optional)', ph: 'e.g. ibu rumah tangga, Bandung' },
-        { key: 'photoUrl', label: 'Photo URL (optional)', type: 'url', ph: 'https://' },
-        { key: 'shotUrl', label: 'Screenshot of the original message (optional)', type: 'url', ph: 'https://' }
-      ] },
-    gal: { key: 'gallery', box: '#gal-list', addBtn: '#gal-add', noun: 'Image', max: MAX_GALLERY, empty: 'No extra images yet.',
-      blank: function () { return { url: '', alt: '', kind: 'product' }; },
-      fields: [
-        { key: 'url', label: 'Image URL', type: 'url', ph: 'https://', wide: true },
-        { key: 'kind', label: 'What is it, and where does it go?', type: 'select', options: GALLERY_KINDS.map(function (k) { return [k.id, k.label + ' → ' + k.secName]; }) },
-        { key: 'alt', label: 'Short description (alt text)', ph: 'e.g. Ebook cover and sample pages' }
-      ] },
-    stat: { key: 'stats', box: '#stat-list', addBtn: '#stat-add', noun: 'Number', max: MAX_STATS, empty: 'No numbers yet. Leave empty if you have no true figures.',
-      blank: function () { return { label: '', value: '', type: 'count' }; },
-      after: function () { refreshFeatureWarn(); },
-      fields: [
-        { key: 'label', label: 'What it counts', ph: 'e.g. Modules, Students, Seats filled' },
-        { key: 'value', label: 'Value', type: 'text', ph: 'e.g. 11 or 40' },
-        { key: 'type', label: 'Show as', type: 'select', options: STAT_TYPES }
-      ] }
-  };
-  return REP;
-}
-function renderRepeaters() { const d = repDefs(); Object.keys(d).forEach(function (k) { renderRepeater(d[k]); }); }
-function addRepeaterItem(k) {
-  const p = state.current, d = repDefs()[k], list = p.content[d.key];
-  if (list.length >= d.max) return;
-  list.push(d.blank());
-  if (k === 'stat' && !p.sectionsCustomized) { const s = p.sections.filter(function (x) { return x.id === 'numbers'; })[0]; if (s) s.enabled = true; }
-  scheduleSave(); renderRepeater(d); refreshFeatureWarn();
-  const first = $('#f-content-' + d.key + '-' + (list.length - 1) + '-' + d.fields[0].key); if (first) first.focus();
+  return ids;
 }
 
-/* ---- page features ---- */
-function featureModeLabel(f, lynk) {
-  if (!lynk) return ['ok', 'Works on a standard website'];
-  return f.lynk === 'yes' ? ['ok', 'Works on Lynk.id'] : f.lynk === 'simpler' ? ['mid', 'Simpler version on Lynk.id'] : ['no', 'Not possible on Lynk.id'];
-}
-function renderFeatures() {
-  const p = state.current, c = p.content, box = $('#feature-list'); box.textContent = '';
-  const lynk = p.brief.platform === 'lynk';
-  FEATURES.forEach(function (f) {
-    const cb = el('input', { type: 'checkbox', id: 'fx-' + f.id }); cb.checked = c.features.indexOf(f.id) !== -1;
-    cb.addEventListener('change', function () {
-      c.features = cb.checked ? c.features.concat(f.id) : c.features.filter(function (x) { return x !== f.id; });
-      scheduleSave(); refreshFeatureWarn(); $('#popup-field').hidden = c.features.indexOf('popup') === -1;
-    });
-    const m = featureModeLabel(f, lynk);
-    box.append(el('label', { class: 'formula', for: 'fx-' + f.id }, cb,
-      el('span', null, el('strong', null, f.name), el('em', { class: 'badge badge-' + m[0] }, m[1]), el('small', null, f.desc + (lynk && f.lynk !== 'yes' ? ' ' + f.lynkNote : '')))));
-  });
-  $('#popup-field').hidden = c.features.indexOf('popup') === -1;
-  refreshFeatureWarn();
-}
-function refreshFeatureWarn() {
-  const p = state.current, c = p.content, w = $('#feature-warn'); if (!w) return;
-  const lynk = p.brief.platform === 'lynk', has = function (id) { return c.features.indexOf(id) !== -1; };
-  const notes = [];
-  c.features.forEach(function (id) {
-    const f = FEATURE_BY_ID[id]; if (!f || !lynk) return;
-    if (f.lynk === 'no') notes.push(f.name + ' will be left out: ' + f.lynkNote);
-    else if (f.lynk === 'simpler') notes.push(f.name + ' will be simplified: ' + f.lynkNote);
-  });
-  if (has('counter') && !c.stats.some(function (s) { return s.type === 'count'; })) notes.push('Auto-counting numbers needs at least one "Counting number" in Real numbers, otherwise it is skipped.');
-  if (has('progress') && !c.stats.some(function (s) { return s.type === 'progress'; })) notes.push('Progress bar needs at least one "Progress bar" number in Real numbers, otherwise it is skipped.');
-  if (has('slider') && c.testimonials.length < 2) notes.push('Slider needs at least two testimonials, otherwise it is skipped.');
-  w.textContent = '';
-  if (notes.length) { w.append(el('ul', null, notes.map(function (n) { return el('li', null, n); }))); w.hidden = false; } else w.hidden = true;
+async function callGemini(prompt, model, signal) {
+  const url = GEMINI_BASE + 'models/' + encodeURIComponent(model) + ':generateContent';
+  const body = JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }] });
+  const data = await geminiRequest(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body }, state.gemini.key, signal);
+  if (data.promptFeedback && data.promptFeedback.blockReason) {
+    throw new Error('Gemini blocked this prompt (' + data.promptFeedback.blockReason + '). Edit the prompt and try again.');
+  }
+  const cand = (data.candidates || [])[0];
+  const parts = cand && cand.content && Array.isArray(cand.content.parts) ? cand.content.parts : [];
+  const text = parts.filter(function (x) { return x && typeof x.text === 'string' && !x.thought; }).map(function (x) { return x.text; }).join('');
+  if (!text.trim()) throw new Error('Gemini returned an empty answer' + (cand && cand.finishReason ? ' (' + cand.finishReason + ')' : '') + '. Try again or choose another model.');
+  return { text: text, finish: (cand && cand.finishReason) || '' };
 }
 
-function renderStep3Extras() {
-  renderBrandPickers(); renderRepeaters(); renderFeatures();
+/* ---- reading the answer ---- */
+function extractBlocks(text) {
+  const blocks = []; const re = /```([A-Za-z0-9]*)[^\n]*\n([\s\S]*?)```/g; let m;
+  while ((m = re.exec(text))) blocks.push({ lang: m[1].toLowerCase(), code: m[2].replace(/\s+$/, '') });
+  if (!blocks.length) {
+    const open = text.match(/```([A-Za-z0-9]*)[^\n]*\n([\s\S]*)$/); // answer cut off before the closing fence
+    if (open) blocks.push({ lang: open[1].toLowerCase(), code: open[2].replace(/\s+$/, '') });
+  }
+  return blocks;
+}
+/* Returns { raw, doc } or null. raw = the HTML as written; doc = a complete page for preview/download. */
+function extractPage(text, lynk) {
+  const blocks = extractBlocks(text);
+  const html = blocks.filter(function (b) { return b.lang === 'html' || b.lang === 'htm'; })[0] || blocks.filter(function (b) { return /<[a-z][\s\S]*>/i.test(b.code) && b.lang !== 'css'; })[0];
+  if (!html || !html.code.trim()) return null;
+  const css = blocks.filter(function (b) { return b.lang === 'css'; }).map(function (b) { return b.code; }).join('\n');
+  let doc = html.code;
+  if (css && !lynk) {
+    const tag = '<style>\n' + css + '\n</style>';
+    doc = doc.replace(/<link[^>]+styles\.css[^>]*>/i, '');
+    doc = /<\/head>/i.test(doc) ? doc.replace(/<\/head>/i, tag + '\n</head>') : tag + '\n' + doc;
+  }
+  if (!/<html[\s>]/i.test(doc)) {
+    doc = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>html,body{margin:0;background:#fff}</style></head><body>' + doc + '</body></html>';
+  }
+  return { raw: html.code, doc: doc, mergedCss: !!css && !lynk };
 }
 
-/* ---- header logo with a safe fallback ---- */
-function setupLogo() {
-  const img = $('#brand-logo'), mark = $('#brand-mark'); if (!img) return;
-  const fail = function () { img.hidden = true; if (mark) mark.hidden = false; };
-  img.addEventListener('error', fail);
-  setTimeout(function () { if (img.complete && img.naturalWidth === 0) fail(); }, 1500);
+/* ---- key panel (built twice: Settings and Step 6) ---- */
+const keyPanels = [];
+
+function setKeyStatus(msg, kind) {
+  state.gemini.status = { msg: msg || '', kind: kind || 'info' };
+  keyPanels.forEach(function (p) { p.status.textContent = state.gemini.status.msg; p.status.className = 'status status-' + state.gemini.status.kind; });
+}
+function syncKeyPanels() {
+  keyPanels.forEach(function (p) {
+    const g = state.gemini;
+    if (document.activeElement !== p.keyInput) p.keyInput.value = g.key;
+    p.remember.checked = g.remember;
+    const current = state.settings.geminiModel;
+    const ids = (g.models.length ? g.models : GEMINI_DEFAULT_MODELS).slice();
+    if (ids.indexOf(current) === -1) ids.unshift(current);
+    p.modelSel.textContent = '';
+    ids.forEach(function (id) { p.modelSel.append(el('option', { value: id }, id + (/-latest$/.test(id) ? ' (follows the newest version)' : ''))); });
+    p.modelSel.value = current;
+    p.status.textContent = g.status.msg; p.status.className = 'status status-' + g.status.kind;
+  });
+  updateGenUI();
+}
+
+async function testGeminiKey() {
+  const g = state.gemini;
+  if (!g.key) { setKeyStatus('Paste your API key first.', 'error'); return; }
+  if (g.busy) return;
+  g.busy = true; setKeyStatus('Checking your key with Google…', 'info');
+  try {
+    const ids = await listGeminiModels(g.key);
+    g.models = ids;
+    if (!ids.length) setKeyStatus('The key works, but no Gemini text models were listed for it.', 'error');
+    else if (ids.indexOf(state.settings.geminiModel) === -1) {
+      state.settings.geminiModel = ids[0]; saveSettings();
+      setKeyStatus('Key works. ' + ids.length + ' models available. Your previous model was not available, so ' + ids[0] + ' was selected.', 'ok');
+    } else setKeyStatus('Key works. ' + ids.length + ' models available for this key.', 'ok');
+  } catch (e) { setKeyStatus(e.message, 'error'); }
+  g.busy = false; syncKeyPanels();
+}
+
+function buildKeyPanel(prefix) {
+  const g = state.gemini;
+  const keyInput = el('input', { type: 'password', id: prefix + '-key', autocomplete: 'off', spellcheck: 'false', autocapitalize: 'off', placeholder: 'Paste your Gemini API key' });
+  const showBtn = el('button', { type: 'button', class: 'btn btn-small', 'aria-pressed': 'false' }, 'Show');
+  const remember = el('input', { type: 'checkbox', id: prefix + '-remember' });
+  const modelSel = el('select', { id: prefix + '-model' });
+  const testBtn = el('button', { type: 'button', class: 'btn btn-small' }, 'Test key and load models');
+  const removeBtn = el('button', { type: 'button', class: 'btn btn-small btn-quiet btn-danger-text' }, 'Remove key');
+  const status = el('p', { class: 'status', role: 'status', 'aria-live': 'polite' });
+
+  keyInput.addEventListener('input', function () {
+    g.key = keyInput.value.trim(); g.models = []; saveGemini(); setKeyStatus('', 'info'); syncKeyPanels();
+  });
+  showBtn.addEventListener('click', function () {
+    const show = keyInput.type === 'password';
+    keyPanels.forEach(function (p) { p.keyInput.type = show ? 'text' : 'password'; p.showBtn.textContent = show ? 'Hide' : 'Show'; p.showBtn.setAttribute('aria-pressed', String(show)); });
+  });
+  remember.addEventListener('change', function () {
+    g.remember = remember.checked; saveGemini();
+    if (g.key) setKeyStatus(g.remember ? 'The key will stay in this browser until you remove it.' : 'The key is now kept for this tab only.', 'info');
+    syncKeyPanels();
+  });
+  modelSel.addEventListener('change', function () { state.settings.geminiModel = modelSel.value; saveSettings(); syncKeyPanels(); });
+  testBtn.addEventListener('click', testGeminiKey);
+  removeBtn.addEventListener('click', function () {
+    wipeGemini(); setKeyStatus('The key was removed from this browser.', 'ok'); syncKeyPanels();
+  });
+
+  const root = el('div', { class: 'gkey' },
+    el('div', { class: 'field' },
+      el('label', { for: prefix + '-key' }, 'Your Google AI Studio API key'),
+      el('div', { class: 'gkey-row' }, keyInput, showBtn),
+      el('p', { class: 'hint' }, el('a', { href: 'https://aistudio.google.com/apikey', target: '_blank', rel: 'noopener noreferrer' }, 'Get a free key in Google AI Studio'), ' (opens in a new tab).')),
+    el('label', { class: 'gkey-check', for: prefix + '-remember' }, remember, el('span', null, 'Remember this key in this browser', el('br'), el('small', { class: 'gkey-note' }, 'Off by default: the key then disappears when you close the tab. Do not turn this on for a shared computer.'))),
+    el('div', { class: 'field' }, el('label', { for: prefix + '-model' }, 'Model'), modelSel),
+    el('div', { class: 'btn-row' }, testBtn, removeBtn),
+    status,
+    el('p', { class: 'gkey-note' }, 'The key is stored only in this browser and sent only to Google (generativelanguage.googleapis.com), never to any other server. Anyone who can use this browser profile can read it. Free-tier requests may be used by Google to improve its products, so do not send private client data on a free key.'));
+
+  keyPanels.push({ root: root, keyInput: keyInput, showBtn: showBtn, remember: remember, modelSel: modelSel, status: status });
+  syncKeyPanels();
+  return root;
+}
+
+/* ---- Step 6: generate with Gemini ---- */
+function setGenStatus(msg, kind) { const n = $('#gen-status'); n.textContent = msg; n.className = 'status status-' + (kind || 'info'); }
+
+function updateGenUI() {
+  const btn = $('#btn-gen'); if (!btn) return;
+  const g = state.gemini;
+  btn.disabled = g.genBusy === true;
+  $('#btn-gen-cancel').hidden = g.genBusy !== true;
+  const det = $('#gkey-details');
+  if (det && !g.key && !det.dataset.touched) det.open = true;
+  const n = $('#gen-model-note');
+  if (n) n.textContent = g.key ? 'Model: ' + state.settings.geminiModel : 'Add your API key below to enable this.';
+}
+
+async function runGemini() {
+  const g = state.gemini, p = state.current;
+  if (!p || g.genBusy) return;
+  const prompt = $('#prompt-text').value.trim();
+  if (!prompt) { setGenStatus('The prompt is empty. Regenerate it first.', 'error'); return; }
+  if (!g.key) {
+    setGenStatus('Add your Gemini API key first.', 'error');
+    const det = $('#gkey-details'); det.open = true;
+    const k = $('#gp-key'); if (k) k.focus();
+    return;
+  }
+  const model = state.settings.geminiModel;
+  const controller = new AbortController(); let timedOut = false;
+  const timer = setTimeout(function () { timedOut = true; controller.abort(); }, 240000);
+  g.genBusy = true; g.controller = controller; updateGenUI();
+  setGenStatus('Asking Gemini (' + model + '). This can take up to a minute…', 'info');
+  try {
+    const r = await callGemini(prompt, model, controller.signal);
+    state.gen = { projectId: p.id, text: r.text, model: model, finish: r.finish };
+    renderGenResult();
+    setGenStatus('Done. Check the preview below before you use the code.', 'ok');
+  } catch (e) {
+    if (e && e.name === 'AbortError') setGenStatus(timedOut ? 'Gemini took too long, so the request was stopped. Try again or choose a Flash model.' : 'Cancelled.', timedOut ? 'error' : 'info');
+    else setGenStatus(e.message, 'error');
+  }
+  clearTimeout(timer); g.genBusy = false; g.controller = null; updateGenUI();
+}
+
+function renderGenResult() {
+  const r = state.gen, box = $('#gen-result');
+  if (!r || !state.current || r.projectId !== state.current.id) { box.hidden = true; return; }
+  const lynk = state.current.brief.platform === 'lynk';
+  const page = extractPage(r.text, lynk);
+  state.genPage = page;
+  box.hidden = false;
+  $('#gen-out').value = r.text;
+  $('#gen-copy').disabled = !page; $('#gen-download').disabled = !page;
+  let note;
+  if (page) note = 'Made by ' + r.model + '. The preview runs without scripts for safety, so animations that need JavaScript will not move here.' + (page.mergedCss ? ' The CSS was merged into one HTML file.' : '');
+  else note = 'No HTML code block was found in the answer. Read the full response below, or generate again.';
+  if (r.finish === 'MAX_TOKENS') note += ' The answer was cut off at the length limit, so the code may be incomplete.';
+  $('#gen-note').textContent = note;
+  const wrap = $('#gen-frame-wrap'); wrap.textContent = ''; wrap.dataset.vp = state.genViewport;
+  if (page) wrap.append(el('iframe', { class: 'gen-iframe', sandbox: '', title: 'Preview of the generated landing page', srcdoc: page.doc }));
+  $$('.gseg-btn').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.gvp === state.genViewport)); });
+}
+
+async function copyText(text) {
+  try { if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(text); return true; } } catch (e) { /* fall back */ }
+  const ta = el('textarea', { style: 'position:fixed;left:-999px;top:0', 'aria-hidden': 'true' }); ta.value = text; document.body.append(ta); ta.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  ta.remove(); return ok;
+}
+function genOutputText() {
+  const pg = state.genPage; if (!pg) return '';
+  return state.current && state.current.brief.platform === 'lynk' ? pg.raw : pg.doc;
+}
+function copyGenCode() {
+  const t = genOutputText(); if (!t) return;
+  copyText(t).then(function (ok) { setGenStatus(ok ? 'HTML copied (' + t.length + ' characters).' : 'Could not copy automatically. Open "Full response" and copy from there.', ok ? 'ok' : 'error'); });
+}
+function downloadGenCode() {
+  const t = genOutputText(); if (!t) return;
+  const p = state.current;
+  const name = String(p.name || p.brief.productName || 'landing-page').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'landing-page';
+  const url = URL.createObjectURL(new Blob([t], { type: 'text/html;charset=utf-8' }));
+  const a = el('a', { href: url, download: name + '.html' }); document.body.append(a); a.click(); a.remove();
+  setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+  setGenStatus('Downloaded ' + name + '.html.', 'ok');
 }
 
 /* ---------- toast + dialog ---------- */
@@ -2073,6 +1444,7 @@ function newProject() {
 function renderSettings() {
   $('#set-platform').value = state.settings.platform;
   $('#set-language').value = state.settings.language;
+  syncKeyPanels();
 }
 
 /* ---------- gallery ---------- */
@@ -2088,7 +1460,7 @@ function styleCard(s, opts) {
   const btn = el('button', { type: 'button', class: 'style-card' + (opts.selected ? ' is-selected' : ''), 'aria-pressed': opts.pressed ? String(!!opts.selected) : null, onclick: opts.onclick },
     makeThumb(s),
     el('span', { class: 'style-card-body' },
-      el('span', { class: 'style-card-name' }, s.name, s.custom ? el('span', { class: 'chip chip-alt' }, 'Custom') : null, opts.selected ? el('span', { class: 'chip' }, 'Selected') : null),
+      el('span', { class: 'style-card-name' }, s.name, opts.selected ? el('span', { class: 'chip' }, 'Selected') : null),
       el('span', { class: 'style-card-desc' }, s.description)));
   return btn;
 }
@@ -2100,11 +1472,10 @@ function renderGallery() {
   $('#gallery-count').textContent = list.length + (list.length === 1 ? ' style' : ' styles') + ' shown';
   fitThumbs(grid);
 }
-function showGalleryList() { state.galleryDetailId = null; showGalleryPane('list'); }
+function showGalleryList() { state.galleryDetailId = null; $('#gallery-list').hidden = false; $('#gallery-detail').hidden = true; }
 function showGalleryDetail(id) {
   const s = getStyle(id); state.galleryDetailId = id;
-  showGalleryPane('detail');
-  $('#detail-custom').hidden = !s.custom;
+  $('#gallery-list').hidden = true; $('#gallery-detail').hidden = false;
   $('#detail-title').textContent = s.name; $('#detail-desc').textContent = s.description;
   const apply = $('#detail-apply');
   apply.textContent = state.current ? 'Apply to current project' : 'Start a project with this style';
@@ -2199,7 +1570,7 @@ function validateStep(n) {
     if (!b.audience.trim()) errs.push({ path: 'brief.audience', msg: 'Describe your target audience.' });
   }
   if (n === 2) {
-    if (d.mode === 'style' && (!d.styleId || !STYLE_BY_ID[d.styleId])) errs.push({ path: 'design.styleId', msg: 'Select a style from the gallery.' });
+    if (d.mode === 'style' && !d.styleId) errs.push({ path: 'design.styleId', msg: 'Select a style from the gallery.' });
     if (d.mode === 'recommend') {
       if (!d.recommend.results.length) errs.push({ path: 'design.recommend', msg: 'Answer the questions and choose "Show recommendations".' });
       else if (d.recommend.results.indexOf(d.styleId) === -1) errs.push({ path: 'design.recommend', msg: 'Choose one of the recommended styles.' });
@@ -2212,22 +1583,6 @@ function validateStep(n) {
   if (n === 3) {
     if (c.ctaUrl.trim() && !validUrl(c.ctaUrl)) errs.push({ path: 'content.ctaUrl', msg: 'The CTA URL must start with http:// or https://.' });
     if (c.productImageUrl.trim() && !validUrl(c.productImageUrl)) errs.push({ path: 'content.productImageUrl', msg: 'The product image URL must start with http:// or https://.' });
-    if (c.logoUrl.trim() && !validUrl(c.logoUrl)) errs.push({ path: 'content.logoUrl', msg: 'The logo URL must start with http:// or https://.' });
-    c.testimonials.forEach(function (t, i) {
-      const k = 'content.testimonials.' + i + '.';
-      if (!t.text.trim()) errs.push({ path: k + 'text', msg: 'Testimonial ' + (i + 1) + ': enter what the customer said, or remove it.' });
-      if (t.photoUrl.trim() && !validUrl(t.photoUrl)) errs.push({ path: k + 'photoUrl', msg: 'Testimonial ' + (i + 1) + ': the photo URL must start with http:// or https://.' });
-      if (t.shotUrl.trim() && !validUrl(t.shotUrl)) errs.push({ path: k + 'shotUrl', msg: 'Testimonial ' + (i + 1) + ': the screenshot URL must start with http:// or https://.' });
-    });
-    c.gallery.forEach(function (g, i) {
-      if (!validUrl(g.url)) errs.push({ path: 'content.gallery.' + i + '.url', msg: 'Image ' + (i + 1) + ': enter a link that starts with http:// or https://, or remove it.' });
-    });
-    c.stats.forEach(function (x, i) {
-      const k = 'content.stats.' + i + '.', v = Number(x.value.replace(',', '.'));
-      if (!x.label.trim()) errs.push({ path: k + 'label', msg: 'Number ' + (i + 1) + ': say what it counts.' });
-      if (!x.value.trim() || !isFinite(v) || v < 0) errs.push({ path: k + 'value', msg: 'Number ' + (i + 1) + ': enter a plain number such as 11 or 40.' });
-      else if (x.type === 'progress' && v > 100) errs.push({ path: k + 'value', msg: 'Number ' + (i + 1) + ': a progress bar value must be between 0 and 100.' });
-    });
   }
   if (n === 4) {
     if (!p.sections.some(function (s) { return s.enabled; })) errs.push({ path: 'sections', msg: 'Switch on at least one section.' });
@@ -2247,7 +1602,6 @@ function onBindInput(e) {
     $('#e-design-recommend').textContent = 'Your answers changed. Choose "Show recommendations" again to refresh the list.';
     $('#e-design-recommend').hidden = false;
   }
-  if (path === 'content.colors') { refreshPickerValues(); renderBrandResolved(); }
   updateConditional();
   scheduleSave();
 }
@@ -2287,7 +1641,7 @@ function showStep(n, focus) {
   $$('.step').forEach(function (s) { s.hidden = Number(s.dataset.step) !== n; });
   clearErrors(); renderProgress(); fillForm(); updateConditional();
   if (n === 2) renderStep2();
-  if (n === 3) { renderFormulas(); renderStep3Extras(); }
+  if (n === 3) renderFormulas();
   if (n === 4) renderSections();
   if (n === 5) renderReview();
   if (n === 6) enterPrompt();
@@ -2319,10 +1673,7 @@ function renderStep2() {
 }
 function renderStylePicker() {
   const d = state.current.design, box = $('#style-picker'); box.textContent = '';
-  const q = ($('#picker-search').value || '').trim().toLowerCase();
-  const shown = STYLES.filter(function (s) { return !q || (s.name + ' ' + s.description + ' ' + s.categories.map(function (c) { return labelOf(CATEGORIES, c); }).join(' ')).toLowerCase().indexOf(q) !== -1; });
-  if (!shown.length) box.append(el('p', { class: 'muted' }, 'No styles match that search.'));
-  shown.forEach(function (s) {
+  STYLES.forEach(function (s) {
     box.append(styleCard(s, { pressed: true, selected: d.styleId === s.id, onclick: function () {
       d.mode = 'style'; d.styleId = s.id; $('#e-design-styleId').hidden = true; scheduleSave(); renderStylePicker();
       const again = $$('.style-card', $('#style-picker')).filter(function (b) { return b.getAttribute('aria-pressed') === 'true'; })[0]; if (again) again.focus();
@@ -2481,15 +1832,7 @@ function renderReview() {
   else if (d.referenceImageName) assets.push('Reference screenshot: ' + d.referenceImageName + ' (needs re-upload)');
   if (d.referenceUrl.trim()) assets.push('Reference URL: ' + d.referenceUrl.trim());
   if (c.productImageUrl.trim()) assets.push('Product image URL: ' + c.productImageUrl.trim());
-  if (c.logoUrl.trim()) assets.push('Logo URL: ' + c.logoUrl.trim());
-  if (c.colors.trim() || c.brand.primary || c.brand.secondary || c.brand.background || c.brand.text) {
-    const rp = resolvePalette(p, style).pal;
-    assets.push('Brand colors in use: background ' + rp.bg.toUpperCase() + ', text ' + rp.ink.toUpperCase() + ', accent ' + rp.accent.toUpperCase() + ', accent 2 ' + rp.accent2.toUpperCase());
-  }
-  if (c.testimonials.length) assets.push(c.testimonials.length + ' testimonial' + (c.testimonials.length > 1 ? 's' : '') + (c.testimonials.some(function (t) { return t.photoUrl.trim() || t.shotUrl.trim(); }) ? ' (with images)' : ''));
-  if (c.gallery.length) assets.push(c.gallery.length + ' extra image' + (c.gallery.length > 1 ? 's' : ''));
-  if (c.stats.length) assets.push(c.stats.length + ' real number' + (c.stats.length > 1 ? 's' : ''));
-  if (c.features.length) assets.push('Features: ' + c.features.map(function (id) { return FEATURE_BY_ID[id].name; }).join(', '));
+  if (parseHex(c.colors).length) assets.push('Brand colors: ' + parseHex(c.colors).join(', '));
   if (c.socialProof.trim()) assets.push('Real social proof text');
   const al = $('#assets-list'); al.textContent = '';
   (assets.length ? assets : ['No assets added yet.']).forEach(function (t) { al.append(el('li', null, t)); });
@@ -2502,16 +1845,9 @@ function renderReview() {
   if (!c.ctaLabel.trim()) missing.push('CTA label (a default is shown in the preview)');
   if (!c.ctaUrl.trim()) missing.push('CTA destination URL');
   if (on('offer') && !c.regularPrice.trim() && !c.promoPrice.trim()) missing.push('Price (offer section is on)');
-  if (on('proof') && !c.socialProof.trim() && !c.testimonials.length) missing.push('Real social proof or testimonials (section is on)');
-  if (c.testimonials.length && !on('proof')) missing.push('Testimonials are added but the Social Proof section is off');
-  if (c.stats.length && !on('numbers')) missing.push('Numbers are added but the Numbers section is off');
-  if (on('numbers') && !c.stats.length) missing.push('Real numbers (Numbers section is on)');
-  if (c.features.length && p.brief.platform === 'lynk') {
-    const lost = c.features.filter(function (id) { return FEATURE_BY_ID[id].lynk !== 'yes'; }).map(function (id) { return FEATURE_BY_ID[id].name + (FEATURE_BY_ID[id].lynk === 'no' ? ' (left out)' : ' (simplified)'); });
-    if (lost.length) missing.push('On Lynk.id: ' + lost.join(', '));
-  }
+  if (on('proof') && !c.socialProof.trim()) missing.push('Real social proof (section is on)');
   if (!c.productImageUrl.trim()) missing.push('Product image URL');
-  if (!c.colors.trim() && !c.brand.primary && !c.brand.background) missing.push('Brand colors (the style\'s own colors are used)');
+  if (!c.colors.trim()) missing.push('Brand colors');
   const ml = $('#missing-list'); ml.textContent = '';
   (missing.length ? missing : ['Nothing important is missing.']).forEach(function (t) { ml.append(el('li', null, t)); });
 
@@ -2522,8 +1858,6 @@ function renderPreviewPanel() {
   const p = state.current, frame = $('#preview-frame');
   frame.textContent = ''; frame.dataset.vp = state.viewport;
   frame.append(renderLanding(p));
-  activateFx(frame);
-  $('#btn-pv-popup').hidden = fxMode(p, 'popup') === 'off';
   const hl = getHeadline(p);
   $('#preview-notes').textContent = (hl.draft ? 'The headline is a draft built from your description and benefit. It is editable copy, not final text. ' : '') +
     'Grey bars mark content Claude will write from your brief. Nothing here is real proof, pricing or results unless you entered it.';
@@ -2555,6 +1889,7 @@ function enterPrompt() {
   if (p.design.mode === 'reference' && p.design.referenceImageName) {
     note.textContent = 'Reminder: attach your reference screenshot (' + p.design.referenceImageName + ') to the Claude chat yourself. The prompt cannot carry the image.'; note.hidden = false;
   } else note.hidden = true;
+  setGenStatus('', 'info'); syncKeyPanels(); renderGenResult();
 }
 function regeneratePrompt() {
   const p = state.current;
@@ -2583,329 +1918,6 @@ async function copyPrompt() {
   else setStatus('Automatic copy is not available here. The whole prompt is selected: press Ctrl+C (Cmd+C on Mac) to copy it.', 'error');
 }
 
-/* ---------- custom styles: validate, save, edit, import, export ---------- */
-const STYLE_TEXT_FIELDS = [['typography', 'Typography'], ['layout', 'Layout'], ['components', 'Components and borders'],
-  ['image', 'Image treatment'], ['cta', 'CTA treatment'], ['avoid', 'Elements to avoid']];
-const PALETTE_ROLES = [['bg', 'Background'], ['surface', 'Surface'], ['ink', 'Text'], ['muted', 'Muted text'], ['line', 'Lines'],
-  ['accent', 'Accent'], ['accent2', 'Accent 2']];
-const FIT_LISTS = { personality: PERSONALITY, emotion: EMOTION, price: PRICE, audience: AUDIENCE };
-const FIT_LABELS = { personality: 'Brand personality', emotion: 'Emotional impression', price: 'Price positioning', audience: 'Audience type' };
-const MAX_CUSTOM_STYLES = 40;
-let editingStyleId = null;
-let editorTimer = null;
-
-function cleanText(s, max) { return String(s === null || s === undefined ? '' : s).replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max); }
-function normHex(s) {
-  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(s || '').trim());
-  if (!m) return null;
-  let h = m[1];
-  if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
-  return '#' + h.toUpperCase();
-}
-function contrastRatio(a, b) {
-  const la = luminance(a.toLowerCase()), lb = luminance(b.toLowerCase());
-  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
-}
-function slugify(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30); }
-
-/* Text used when a custom style leaves guidance fields empty. */
-function defaultTexts(s) {
-  const r = s.recipe, lab = function (k, v) { const f = RECIPE_OPTS[k].filter(function (o) { return o[0] === v; })[0]; return f ? f[1].toLowerCase() : v; };
-  return {
-    typography: 'Headings in ' + FONT_LABELS[s.fonts.display].toLowerCase() + ' (' + lab('weight', r.weight) + ', ' + lab('caps', r.caps) + '); body text in ' + FONT_LABELS[s.fonts.body].toLowerCase() + '.',
-    layout: 'Hero: ' + lab('hero', r.hero) + '. Lists: ' + lab('list', r.list) + '. Section backgrounds: ' + lab('sections', r.sections) + '. Spacing: ' + lab('density', r.density) + '.',
-    components: 'Corners: ' + lab('radius', r.radius) + '. Borders: ' + lab('border', r.border) + '. Shadows: ' + lab('shadow', r.shadow) + '.',
-    image: 'Use imagery that fits this palette and keep one consistent treatment across the page.',
-    cta: lab('button', r.button).replace(/^./, function (c) { return c.toUpperCase(); }) + ' buttons in the accent color, clearly the strongest element in view.',
-    avoid: 'Colors, effects and decorations that are not part of this palette and these choices.'
-  };
-}
-
-/* The single gatekeeper for custom and imported styles. Returns { style } or { errors }. */
-function sanitizeStyle(obj, keepId) {
-  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return { errors: ['The data must be one JSON object.'] };
-  const errors = [];
-  const name = cleanText(String(obj.name === undefined || obj.name === null ? '' : obj.name).replace(/[<>]/g, ''), 60);
-  if (!name) errors.push('Give the style a name.');
-  const pal = {}, src = obj.palette && typeof obj.palette === 'object' ? obj.palette : {};
-  PALETTE_ROLES.forEach(function (r) {
-    const h = normHex(src[r[0]]);
-    if (!h) errors.push('Color "' + r[1] + '" must be a hex code such as #1F6F78.'); else pal[r[0]] = h;
-  });
-  if (pal.bg && pal.ink && contrastRatio(pal.bg, pal.ink) < 4.5) errors.push('Text and background colors need a contrast ratio of at least 4.5:1 so the page stays readable.');
-  const fonts = { display: 'sans', body: 'sans' }, fs = obj.fonts && typeof obj.fonts === 'object' ? obj.fonts : {};
-  ['display', 'body'].forEach(function (k) {
-    if (fs[k] === undefined) return;
-    if (Object.prototype.hasOwnProperty.call(FONT_STACKS, fs[k])) fonts[k] = fs[k];
-    else errors.push('Font "' + k + '" must be one of: ' + Object.keys(FONT_STACKS).join(', ') + '.');
-  });
-  const rec = Object.assign({}, RECIPE_DEFAULT), rs = obj.recipe && typeof obj.recipe === 'object' ? obj.recipe : {};
-  Object.keys(RECIPE_OPTS).forEach(function (k) {
-    if (rs[k] === undefined) return;
-    if (RECIPE_OPTS[k].some(function (o) { return o[0] === rs[k]; })) rec[k] = rs[k];
-    else errors.push('Layout option "' + k + '" must be one of: ' + RECIPE_OPTS[k].map(function (o) { return o[0]; }).join(', ') + '.');
-  });
-  const catIds = CATEGORIES.map(function (c) { return c[0]; });
-  const cats = (Array.isArray(obj.categories) ? obj.categories : []).filter(function (c) { return catIds.indexOf(c) !== -1; }).filter(function (c, i, a) { return a.indexOf(c) === i; });
-  const fit = {}, fsrc = obj.fit && typeof obj.fit === 'object' ? obj.fit : {};
-  Object.keys(FIT_LISTS).forEach(function (k) {
-    const ok = FIT_LISTS[k].map(function (x) { return x[0]; });
-    fit[k] = (Array.isArray(fsrc[k]) ? fsrc[k] : []).filter(function (x) { return ok.indexOf(x) !== -1; });
-  });
-  if (errors.length) return { errors: errors };
-  const style = {
-    id: keepId && /^c-[a-z0-9-]{1,60}$/.test(keepId) ? keepId : 'c-' + (slugify(name) || 'style') + '-' + Math.random().toString(36).slice(2, 7),
-    custom: true, name: name, description: cleanText(obj.description, 240) || 'Custom style.',
-    categories: cats, palette: pal, fonts: fonts, fit: fit, recipe: rec
-  };
-  STYLE_TEXT_FIELDS.forEach(function (f) { style[f[0]] = cleanText(obj[f[0]], 400); });
-  const d = defaultTexts(style);
-  STYLE_TEXT_FIELDS.forEach(function (f) { if (!style[f[0]]) style[f[0]] = d[f[0]]; });
-  return { style: style, errors: [] };
-}
-
-function styleToObj(s) {
-  const o = { format: 'lpps-style', version: 1, name: s.name, description: s.description, categories: s.categories.slice(),
-    palette: Object.assign({}, s.palette), fonts: Object.assign({}, s.fonts), recipe: Object.assign({}, s.recipe),
-    fit: { personality: s.fit.personality.slice(), emotion: s.fit.emotion.slice(), price: s.fit.price.slice(), audience: s.fit.audience.slice() } };
-  STYLE_TEXT_FIELDS.forEach(function (f) { o[f[0]] = s[f[0]]; });
-  return o;
-}
-
-function loadCustomStyles() {
-  const raw = storageGet(KEYS.styles);
-  customStyles = [];
-  if (raw) {
-    try {
-      const arr = JSON.parse(raw);
-      if (!Array.isArray(arr)) throw new Error('bad');
-      arr.slice(0, MAX_CUSTOM_STYLES).forEach(function (o) { const r = sanitizeStyle(o, o && o.id); if (r.style) customStyles.push(r.style); });
-    } catch (e) { storageSet('lpps.styles.v1.damaged', raw); toast('Your saved custom styles could not be read, so the list was reset.', 'error', 7000); }
-  }
-  rebuildStyles();
-}
-function saveCustomStyles() {
-  if (!storageSet(KEYS.styles, JSON.stringify(customStyles))) { toast('Could not save your styles: browser storage is unavailable or full.', 'error', 7000); return false; }
-  return true;
-}
-
-/* ----- the prompt that asks Claude to produce a style file ----- */
-function styleMakerPrompt() {
-  const pick = function (list) { return list.map(function (x) { return x[0]; }).join(' | '); };
-  const example = {
-    format: 'lpps-style', version: 1, name: 'Style name', description: 'One sentence describing the mood.',
-    categories: ['digital', 'course'],
-    palette: { bg: '#FBF7F0', surface: '#F0E8DA', ink: '#2B2622', muted: '#6B6258', line: '#D9CFBF', accent: '#A4442A', accent2: '#F0DCC8' },
-    fonts: { display: 'serif', body: 'sans' },
-    recipe: { hero: 'split', radius: 'md', border: 'thin', shadow: 'none', weight: 'bold', caps: 'normal', list: 'rows', button: 'solid', sections: 'plain', density: 'normal' },
-    fit: { personality: ['warm'], emotion: ['trust'], price: ['mid'], audience: ['beginners'] },
-    typography: 'Short description of the type style.', layout: 'Short description of the composition.',
-    components: 'Corners, borders, shadows.', image: 'How photos or illustrations are treated.',
-    cta: 'How the main button looks.', avoid: 'What would break this style.'
-  };
-  const lines = [
-    'You are helping me create a custom visual style for a landing page prompt tool.',
-    'I will attach a screenshot or describe a design I like. Study its visual language: palette, typography, layout, shapes, borders, shadows, imagery and buttons.',
-    'Reply with ONLY one JSON object inside a single code block. No commentary before or after it.',
-    '',
-    'Rules:',
-    '- Describe the design language only. Do not include brand names, logos or copied text.',
-    '- Every palette value is a hex code (#RRGGBB). The "ink" color must have at least 4.5:1 contrast on "bg".',
-    '- Use only the allowed values below. Text fields are plain text, 300 characters or fewer.',
-    '',
-    'Allowed values:',
-    '- fonts.display and fonts.body: ' + Object.keys(FONT_STACKS).join(' | ')
-  ];
-  Object.keys(RECIPE_OPTS).forEach(function (k) { lines.push('- recipe.' + k + ': ' + pick(RECIPE_OPTS[k])); });
-  lines.push('- categories (array, any of): ' + pick(CATEGORIES));
-  Object.keys(FIT_LISTS).forEach(function (k) { lines.push('- fit.' + k + ' (array, any of): ' + pick(FIT_LISTS[k])); });
-  lines.push('', 'JSON format:', JSON.stringify(example, null, 2), '', 'My reference: [attach a screenshot here, or describe the look in a few sentences]');
-  return lines.join('\n');
-}
-
-/* ----- gallery panes ----- */
-function showGalleryPane(name) {
-  ['list', 'detail', 'edit', 'import'].forEach(function (n) { $('#gallery-' + n).hidden = n !== name; });
-  window.scrollTo(0, 0);
-}
-function refreshStyleSelects() {
-  const base = $('#f-design-baseStyleId'), keep = base.value; base.textContent = '';
-  base.append(el('option', { value: 'auto' }, 'Automatic (best rule-based match for my brief)'));
-  STYLES.forEach(function (s) { base.append(el('option', { value: s.id }, s.name)); });
-  base.value = STYLE_BY_ID[keep] ? keep : 'auto';
-  const gc = $('#gallery-category'), cur = gc.value; gc.textContent = ''; gc.append(el('option', { value: '' }, 'All categories'));
-  CATEGORIES.forEach(function (c) { if (STYLES.some(function (s) { return s.categories.indexOf(c[0]) !== -1; })) gc.append(el('option', { value: c[0] }, c[1])); });
-  gc.value = cur;
-}
-
-/* ----- editor ----- */
-function blankStyleObj() {
-  return { name: '', description: '', categories: [], palette: { bg: '#FBF7F0', surface: '#F0E8DA', ink: '#2B2622', muted: '#6B6258', line: '#D9CFBF', accent: '#A4442A', accent2: '#F0DCC8' },
-    fonts: { display: 'serif', body: 'sans' }, recipe: Object.assign({}, RECIPE_DEFAULT), fit: { personality: [], emotion: [], price: [], audience: [] },
-    typography: '', layout: '', components: '', image: '', cta: '', avoid: '' };
-}
-
-function fieldset(legend, hint) { return el('fieldset', { class: 'se-set' }, el('legend', null, legend), hint ? el('p', { class: 'hint' }, hint) : null); }
-function labeled(id, text, control) { return el('div', { class: 'field' }, el('label', { for: id }, text), control); }
-function selectOf(id, pairs, value, emptyLabel) {
-  const s = el('select', { id: id });
-  if (emptyLabel) s.append(el('option', { value: '' }, emptyLabel));
-  pairs.forEach(function (p) { s.append(el('option', { value: p[0] }, p[1])); });
-  s.value = value || '';
-  return s;
-}
-
-function buildStyleForm(v) {
-  const f = $('#se-form'); f.textContent = '';
-  const basics = fieldset('Basics');
-  basics.append(labeled('se-name', 'Style name (required)', el('input', { id: 'se-name', type: 'text', maxlength: '60', value: v.name, autocomplete: 'off' })));
-  basics.append(labeled('se-description', 'Short description', el('textarea', { id: 'se-description', rows: '2', maxlength: '240' }, v.description)));
-  f.append(basics);
-
-  const colors = fieldset('Colors', 'Pick with the color square or type a hex code. Text on background needs 4.5:1 contrast.');
-  const grid = el('div', { class: 'color-grid' });
-  PALETTE_ROLES.forEach(function (r) {
-    const hex = v.palette[r[0]];
-    const picker = el('input', { type: 'color', id: 'se-c-' + r[0], value: normHex(hex) ? normHex(hex).toLowerCase() : '#000000', 'aria-label': r[1] + ' color picker' });
-    const text = el('input', { type: 'text', id: 'se-h-' + r[0], value: hex, maxlength: '7', autocomplete: 'off', spellcheck: 'false', 'aria-label': r[1] + ' hex code' });
-    picker.addEventListener('input', function () { text.value = picker.value.toUpperCase(); scheduleEditorPreview(); });
-    text.addEventListener('input', function () { const h = normHex(text.value); if (h) picker.value = h.toLowerCase(); scheduleEditorPreview(); });
-    grid.append(el('div', { class: 'color-row' }, el('span', { class: 'color-name' }, r[1]), picker, text));
-  });
-  colors.append(grid); f.append(colors);
-
-  const fonts = fieldset('Fonts', 'Only safe system fonts, so the page works everywhere.');
-  fonts.append(labeled('se-font-display', 'Headings', selectOf('se-font-display', Object.keys(FONT_LABELS).map(function (k) { return [k, FONT_LABELS[k]]; }), v.fonts.display)));
-  fonts.append(labeled('se-font-body', 'Body text', selectOf('se-font-body', Object.keys(FONT_LABELS).map(function (k) { return [k, FONT_LABELS[k]]; }), v.fonts.body)));
-  f.append(fonts);
-
-  const lay = fieldset('Look and layout');
-  Object.keys(RECIPE_OPTS).forEach(function (k) { lay.append(labeled('se-r-' + k, RECIPE_LABELS[k], selectOf('se-r-' + k, RECIPE_OPTS[k], v.recipe[k]))); });
-  f.append(lay);
-
-  const cats = fieldset('Suitable for', 'Used by the style gallery filter.');
-  const cl = el('div', { class: 'check-grid' });
-  CATEGORIES.forEach(function (c) {
-    const cb = el('input', { type: 'checkbox', id: 'se-cat-' + c[0], value: c[0] }); cb.checked = v.categories.indexOf(c[0]) !== -1;
-    cl.append(el('label', { class: 'check', for: 'se-cat-' + c[0] }, cb, c[1]));
-  });
-  cats.append(cl); f.append(cats);
-
-  const fit = fieldset('Recommendation hints (optional)', 'Lets "Recommend for me" suggest this style.');
-  Object.keys(FIT_LISTS).forEach(function (k) { fit.append(labeled('se-fit-' + k, FIT_LABELS[k], selectOf('se-fit-' + k, FIT_LISTS[k], v.fit[k][0] || '', 'Not set'))); });
-  f.append(fit);
-
-  const txt = fieldset('Guidance for the prompt (optional)', 'Plain text. Leave empty and the app writes it from your choices above.');
-  STYLE_TEXT_FIELDS.forEach(function (t) { txt.append(labeled('se-t-' + t[0], t[1], el('textarea', { id: 'se-t-' + t[0], rows: '2', maxlength: '400' }, v[t[0]]))); });
-  f.append(txt);
-
-  f.append(el('div', { id: 'se-error', class: 'banner banner-error', role: 'alert', tabindex: '-1', hidden: true }));
-  f.append(el('div', { class: 'btn-row' },
-    el('button', { type: 'submit', class: 'btn btn-primary' }, 'Save style'),
-    el('button', { type: 'button', class: 'btn btn-quiet', onclick: leaveEditor }, 'Cancel')));
-}
-
-function readEditorObj() {
-  const g = function (id) { const n = $('#' + id); return n ? n.value : ''; };
-  const o = { name: g('se-name'), description: g('se-description'), palette: {}, fonts: { display: g('se-font-display'), body: g('se-font-body') }, recipe: {}, categories: [], fit: {} };
-  PALETTE_ROLES.forEach(function (r) { o.palette[r[0]] = g('se-h-' + r[0]); });
-  Object.keys(RECIPE_OPTS).forEach(function (k) { o.recipe[k] = g('se-r-' + k); });
-  CATEGORIES.forEach(function (c) { if ($('#se-cat-' + c[0]).checked) o.categories.push(c[0]); });
-  Object.keys(FIT_LISTS).forEach(function (k) { const v = g('se-fit-' + k); o.fit[k] = v ? [v] : []; });
-  STYLE_TEXT_FIELDS.forEach(function (t) { o[t[0]] = g('se-t-' + t[0]); });
-  return o;
-}
-function scheduleEditorPreview() { clearTimeout(editorTimer); editorTimer = setTimeout(updateEditorPreview, 120); }
-function updateEditorPreview() {
-  const o = readEditorObj(); if (!o.name.trim()) o.name = 'Preview';
-  const r = sanitizeStyle(o, 'c-preview');
-  const box = $('#se-preview');
-  if (!r.style) return; // keep the last good preview while a value is half-typed
-  box.textContent = ''; box.append(renderLanding(sampleProject(), { style: r.style, only: ['hero', 'benefits', 'how', 'offer', 'final'] }));
-}
-function openStyleEditor(style) {
-  editingStyleId = style ? style.id : null;
-  showGalleryPane('edit');
-  $('#se-title').textContent = style ? 'Edit your style' : 'Create your own style';
-  buildStyleForm(style ? styleToObj(style) : blankStyleObj());
-  updateEditorPreview();
-  $('#se-title').focus({ preventScroll: true });
-}
-function leaveEditor() {
-  if (editingStyleId && STYLE_BY_ID[editingStyleId]) showGalleryDetail(editingStyleId); else { showGalleryPane('list'); renderGallery(); }
-}
-function showFormErrors(box, errors) {
-  box.textContent = '';
-  box.append(el('p', null, el('strong', null, errors.length === 1 ? 'One thing to fix:' : errors.length + ' things to fix:')), el('ul', null, errors.map(function (e) { return el('li', null, e); })));
-  box.hidden = false; box.focus();
-}
-function saveEditorStyle(e) {
-  e.preventDefault();
-  const box = $('#se-error'); box.hidden = true;
-  const r = sanitizeStyle(readEditorObj(), editingStyleId);
-  if (!r.style) { showFormErrors(box, r.errors); return; }
-  addOrReplaceCustomStyle(r.style, editingStyleId ? 'Style updated.' : 'Style saved. You can now pick it in Design.');
-}
-function addOrReplaceCustomStyle(style, message) {
-  const idx = customStyles.map(function (s) { return s.id; }).indexOf(style.id);
-  if (idx === -1 && customStyles.length >= MAX_CUSTOM_STYLES) { toast('You can keep up to ' + MAX_CUSTOM_STYLES + ' custom styles. Delete one first.', 'error'); return false; }
-  if (idx === -1) customStyles.push(style); else customStyles[idx] = style;
-  rebuildStyles(); refreshStyleSelects();
-  const saved = saveCustomStyles();
-  renderGallery();
-  showGalleryDetail(style.id);
-  toast(saved ? message : 'Style added for this session, but it could not be saved in this browser.', saved ? 'ok' : 'error', 5000);
-  return true;
-}
-
-/* ----- import / export ----- */
-function openImport() {
-  showGalleryPane('import');
-  $('#maker-text').value = styleMakerPrompt(); $('#imp-text').value = ''; $('#imp-file').value = '';
-  $('#imp-error').hidden = true; $('#maker-status').textContent = '';
-  $('#imp-title').focus({ preventScroll: true });
-}
-async function copyText(text, ta) {
-  try { if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(text); return true; } } catch (e) { /* fall back */ }
-  if (ta) { ta.focus(); ta.select(); try { return document.execCommand('copy'); } catch (e) { return false; } }
-  return false;
-}
-function doImport() {
-  const box = $('#imp-error'); box.hidden = true;
-  let text = $('#imp-text').value.trim();
-  if (!text) { showFormErrors(box, ['Paste the JSON or choose a file first.']); return; }
-  const fence = /```(?:json)?\s*([\s\S]*?)```/i.exec(text); if (fence) text = fence[1].trim();
-  let obj;
-  try { obj = JSON.parse(text); } catch (e) { showFormErrors(box, ['This is not valid JSON, so nothing was imported. Make sure you copied the whole code block from Claude.']); return; }
-  if (obj && obj.format !== undefined && obj.format !== 'lpps-style') { showFormErrors(box, ['This file is not a style file from this app (format "' + cleanText(obj.format, 30) + '").']); return; }
-  const r = sanitizeStyle(obj, null);
-  if (!r.style) { showFormErrors(box, r.errors); return; }
-  addOrReplaceCustomStyle(r.style, 'Imported "' + r.style.name + '".');
-}
-function exportStyle(s) {
-  try {
-    const blob = new Blob([JSON.stringify(styleToObj(s), null, 2)], { type: 'application/json' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = (slugify(s.name) || 'style') + '.lpps-style.json';
-    document.body.append(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 1500);
-    toast('Style file downloaded.', 'ok', 2500);
-  } catch (e) { toast('The file could not be created in this browser.', 'error'); }
-}
-function deleteCustomStyle(id) {
-  const s = STYLE_BY_ID[id]; if (!s || !s.custom) return;
-  openDialog({ title: 'Delete this style?', message: '"' + s.name + '" will be removed. Projects that use it will need a new style choice.', okText: 'Delete', danger: true }).then(function (yes) {
-    if (!yes) return;
-    customStyles = customStyles.filter(function (x) { return x.id !== id; });
-    rebuildStyles(); refreshStyleSelects(); saveCustomStyles();
-    state.projects.forEach(function (p) {
-      if (p.design.styleId === id) p.design.styleId = '';
-      if (p.design.baseStyleId === id) p.design.baseStyleId = 'auto';
-      p.design.recommend.results = p.design.recommend.results.filter(function (x) { return x !== id; });
-    });
-    persist();
-    showGalleryPane('list'); renderGallery(); toast('Style deleted.', 'ok');
-  });
-}
-
 /* =====================================================================
    8. INIT
    ===================================================================== */
@@ -2922,44 +1934,15 @@ function bindEvents() {
   $('#gallery-back').addEventListener('click', function () { showGalleryList(); renderGallery(); window.scrollTo(0, 0); });
   $('#detail-apply').addEventListener('click', function () { applyStyleToProject(state.galleryDetailId); });
 
-  // Custom styles
-  $('#btn-style-new').addEventListener('click', function () { openStyleEditor(null); });
-  $('#btn-style-import').addEventListener('click', openImport);
-  $('#se-back').addEventListener('click', leaveEditor);
-  $('#imp-back').addEventListener('click', function () { showGalleryPane('list'); renderGallery(); });
-  $('#se-form').addEventListener('submit', saveEditorStyle);
-  $('#se-form').addEventListener('input', scheduleEditorPreview);
-  $('#se-form').addEventListener('change', scheduleEditorPreview);
-  $('#btn-maker-copy').addEventListener('click', function () {
-    copyText($('#maker-text').value, $('#maker-text')).then(function (ok) {
-      const n = $('#maker-status'); n.className = 'status ' + (ok ? 'status-ok' : 'status-error');
-      n.textContent = ok ? 'Prompt copied. Paste it into Claude and attach your reference.' : 'Automatic copy is not available here. The text is selected: press Ctrl+C (Cmd+C on Mac).';
-    });
-  });
-  $('#imp-file').addEventListener('change', function (e) {
-    const f = e.target.files && e.target.files[0]; if (!f) return;
-    if (f.size > 200 * 1024) { showFormErrors($('#imp-error'), ['That file is larger than 200 KB. A style file should be much smaller.']); return; }
-    const rd = new FileReader();
-    rd.onload = function () { $('#imp-text').value = String(rd.result); $('#imp-error').hidden = true; };
-    rd.onerror = function () { showFormErrors($('#imp-error'), ['The file could not be read.']); };
-    rd.readAsText(f);
-  });
-  $('#btn-imp-go').addEventListener('click', doImport);
-  $('#detail-edit').addEventListener('click', function () { openStyleEditor(getStyle(state.galleryDetailId)); });
-  $('#detail-export').addEventListener('click', function () { exportStyle(getStyle(state.galleryDetailId)); });
-  $('#detail-delete').addEventListener('click', function () { deleteCustomStyle(state.galleryDetailId); });
-  $('#picker-search').addEventListener('input', renderStylePicker);
-  $('#picker-new').addEventListener('click', function () { showView('gallery'); });
-
   // Settings
   $('#set-platform').addEventListener('change', function (e) { state.settings.platform = e.target.value; if (saveSettings()) toast('Default platform saved.', 'ok', 2000); });
   $('#set-language').addEventListener('change', function (e) { state.settings.language = e.target.value; if (saveSettings()) toast('Default language saved.', 'ok', 2000); });
   $('#btn-clear').addEventListener('click', function () {
-    openDialog({ title: 'Clear all local data?', message: 'This removes every saved project and your settings from this browser. It cannot be undone.', okText: 'Clear everything', danger: true }).then(function (yes) {
+    openDialog({ title: 'Clear all local data?', message: 'This removes every saved project, your settings and any saved API key from this browser. It cannot be undone.', okText: 'Clear everything', danger: true }).then(function (yes) {
       if (!yes) return;
-      storageRemove(KEYS.projects); storageRemove(KEYS.settings); storageRemove(KEYS.styles); storageRemove('lpps.projects.v1.damaged'); storageRemove('lpps.styles.v1.damaged');
-      customStyles = []; rebuildStyles(); refreshStyleSelects();
-      state.projects = []; state.current = null; state.dirty = false; state.settings = { platform: 'lynk', language: 'id' };
+      storageRemove(KEYS.projects); storageRemove(KEYS.settings); storageRemove('lpps.projects.v1.damaged');
+      wipeGemini(); state.gen = null; state.genPage = null;
+      state.projects = []; state.current = null; state.dirty = false; state.settings = { platform: 'lynk', language: 'id', geminiModel: 'gemini-flash-latest' };
       renderSettings(); toast('All local project data was cleared.', 'ok');
     });
   });
@@ -2983,19 +1966,6 @@ function bindEvents() {
   $('#btn-back').addEventListener('click', goBack);
   $$('[data-goto]').forEach(function (b) { b.addEventListener('click', function () { showStep(Number(b.dataset.goto)); }); });
 
-  // Step 3 extras
-  $('#tm-add').addEventListener('click', function () { addRepeaterItem('tm'); });
-  $('#gal-add').addEventListener('click', function () { addRepeaterItem('gal'); });
-  $('#stat-add').addEventListener('click', function () { addRepeaterItem('stat'); });
-  $('#btn-pv-popup').addEventListener('click', function () {
-    const p = state.current, L = L10N[p.brief.language] || L10N.en, dlg = $('#dlg-popup'), box = $('#popup-mock');
-    box.textContent = ''; box.append(popupMock(p, L));
-    const res = resolvePalette(p, getStyle(resolveStyleId(p))).pal;
-    dlg.style.setProperty('--pm-bg', res.bg); dlg.style.setProperty('--pm-ink', res.ink); dlg.style.setProperty('--pm-accent', res.accent); dlg.style.setProperty('--pm-on', readable(res.accent));
-    if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
-  });
-  setupLogo();
-
   // Preview
   $('#btn-gen-preview').addEventListener('click', generatePreview);
   $$('.seg-btn').forEach(function (b) { b.addEventListener('click', function () { state.viewport = b.dataset.vp; renderPreviewPanel(); }); });
@@ -3009,6 +1979,16 @@ function bindEvents() {
   $('#btn-edit-prompt').addEventListener('click', function () { const ta = $('#prompt-text'); ta.focus(); ta.setSelectionRange(0, 0); ta.scrollTop = 0; setStatus('You can edit the prompt directly in the text box. Changes are saved automatically.', 'info'); });
   $('#btn-new-from-6').addEventListener('click', newProject);
 
+  // Gemini (optional)
+  $('#gkey-mount-settings').append(buildKeyPanel('gs'));
+  $('#gkey-mount-studio').append(buildKeyPanel('gp'));
+  $('#gkey-details').addEventListener('toggle', function (e) { e.target.dataset.touched = '1'; });
+  $('#btn-gen').addEventListener('click', runGemini);
+  $('#btn-gen-cancel').addEventListener('click', function () { if (state.gemini.controller) state.gemini.controller.abort(); });
+  $('#gen-copy').addEventListener('click', copyGenCode);
+  $('#gen-download').addEventListener('click', downloadGenCode);
+  $$('.gseg-btn').forEach(function (b) { b.addEventListener('click', function () { state.genViewport = b.dataset.gvp; renderGenResult(); }); });
+
   window.addEventListener('pagehide', flushSave);
   window.addEventListener('beforeunload', flushSave);
 }
@@ -3016,17 +1996,21 @@ function bindEvents() {
 function populateSelects() {
   fillSelect($('#f-brief-category'), CATEGORIES, 'Select a category (optional)');
   fillSelect($('#f-brief-goal'), GOALS, 'Select a goal');
+  const base = $('#f-design-baseStyleId'); base.textContent = '';
+  base.append(el('option', { value: 'auto' }, 'Automatic (best rule-based match for my brief)'));
+  STYLES.forEach(function (s) { base.append(el('option', { value: s.id }, s.name)); });
   fillSelect($('#f-design-recommend-personality'), PERSONALITY, 'Select...');
   fillSelect($('#f-design-recommend-emotion'), EMOTION, 'Select...');
   fillSelect($('#f-design-recommend-price'), PRICE, 'Select...');
   fillSelect($('#f-design-recommend-audience'), AUDIENCE, 'Select...');
-  refreshStyleSelects();
+  const gc = $('#gallery-category'); gc.textContent = ''; gc.append(el('option', { value: '' }, 'All categories'));
+  CATEGORIES.forEach(function (c) { if (STYLES.some(function (s) { return s.categories.indexOf(c[0]) !== -1; })) gc.append(el('option', { value: c[0] }, c[1])); });
 }
 
 function init() {
   detectStorage();
   loadSettings();
-  loadCustomStyles();
+  loadGemini();
   loadProjects();
   populateSelects();
   bindEvents();
