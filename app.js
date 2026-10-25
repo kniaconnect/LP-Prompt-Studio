@@ -246,6 +246,406 @@ const FORMULAS = [
     use: '4U for headlines: make each headline Useful, Unique and Ultra-specific. Only make it Urgent if a real deadline is supplied; otherwise skip urgency.' }
 ];
 
+/* =====================================================================
+   FORMULA EXECUTION ENGINE
+   FORMULAS (above) stays as the UI list. FORMULA_SPECS holds what the
+   prompt composer actually executes: stages, where each stage lives in
+   the page (adapted to the sections the user switched on), headline and
+   body strategy, transitions, CTA strategy and validation rules.
+   "at" = preferred sections, "fb" = fallbacks, "pos" = last resort
+   (first, middle or last enabled section).
+   ===================================================================== */
+const FORMULA_SPECS = {
+  aida: {
+    purpose: 'Move a cold reader in one forward line: notice, understand, want, act.',
+    stages: [
+      { key: 'Attention', pos: 'start', at: ['hero'], fb: [], job: 'Hook with a specific line that names the reader situation or the outcome they want. The hero earns the next scroll; it does not explain everything.' },
+      { key: 'Interest', pos: 'mid', at: ['problem', 'solution'], fb: ['hero'], job: 'Show you understand their situation, then connect it to what the product is and how it helps, in plain words.' },
+      { key: 'Desire', pos: 'mid', at: ['benefits', 'features', 'included', 'proof', 'bonus', 'how'], fb: ['solution', 'hero'], job: 'Make the outcome tangible: concrete benefits, what is inside, what makes it different, and only real proof.' },
+      { key: 'Action', pos: 'end', at: ['offer', 'final'], fb: [], job: 'State the offer plainly (what they get, the price if supplied) and give one obvious next step.' }
+    ],
+    headline: 'Open with a specific hook that names the audience situation or desired outcome, not the product category. The subheadline adds who it is for and the concrete thing they receive.',
+    body: 'Each section advances one letter of AIDA and adds a new argument. Order of persuasion: reader situation, product, value, offer. Short paragraphs, concrete nouns.',
+    transitions: 'The hero ends on a promise the next section pays off. Interest ends by naming the gap the product fills. Desire ends by pointing to the offer. Use bridging sentences, not repeated headings.',
+    cta: 'One primary CTA with the same label everywhere. Show it in the hero (Attention can convert early), after Desire, and in the closing band. The Action block states offer, price and next step in that order.',
+    validate: ['Hook, interest-building explanation, desire-building benefits or proof, and an explicit action block are all findable.', 'The hero does not retell the whole product.', 'No section repeats the hero promise in new words.'],
+    secondary: { targets: ['hero', 'offer', 'final'], text: 'Use AIDA only for the hero hook (Attention) and the closing offer (Action).' }
+  },
+  pas: {
+    purpose: 'Win readers who already feel a specific pain: name it exactly, make the cost of ignoring it felt, then present the product as the relief.',
+    stages: [
+      { key: 'Problem', pos: 'start', at: ['problem'], fb: ['hero'], job: 'Name the pain in the reader own words using the problem from the brief. Two or three recognisable situations, no vague "struggling".' },
+      { key: 'Agitate', pos: 'start', at: ['problem'], fb: ['hero', 'solution'], job: 'Spell out the practical cost of leaving it as is (time, effort, money, missed chances). Honest and proportionate: no catastrophising, no statistics, no fear tactics.' },
+      { key: 'Solution', pos: 'mid', at: ['solution', 'benefits', 'features', 'how', 'included'], fb: ['hero'], job: 'Pivot with one clear sentence, then show how the product removes the pain, backed by its real contents and benefits.' }
+    ],
+    headline: 'The headline names the pain, the unwanted situation, or promises its removal, in the reader own words. It must be recognisable to the target audience at first glance.',
+    body: 'Problem first, product second. Spend roughly the first third of the page on the pain, then pivot once. Benefits are written as relief from the named pain, not as generic positives.',
+    transitions: 'One explicit pivot sentence between Agitate and Solution (for example "That is why..."). It happens once. Later sections refer back to the pain instead of restating it.',
+    cta: 'The primary CTA appears after the Solution pivot, not before the pain is named. The label promises relief or the next concrete step. The closing CTA repeats the relief in one line.',
+    validate: ['The pain is named specifically in the first screen or the problem section.', 'Agitation stays practical and has no invented numbers.', 'A single, visible pivot from problem to solution exists.'],
+    secondary: { targets: ['problem', 'solution'], text: 'Use PAS inside the problem and solution sections only.' }
+  },
+  '4p': {
+    purpose: 'Paint the result first, promise it realistically, prove it with what really exists, then nudge.',
+    stages: [
+      { key: 'Picture', pos: 'start', at: ['hero'], fb: ['problem'], job: 'Describe the desired situation concretely: a scene or outcome the reader can imagine, not an adjective.' },
+      { key: 'Promise', pos: 'mid', at: ['solution', 'benefits'], fb: ['hero'], job: 'State what the product delivers and for whom, realistically, without guaranteed results.' },
+      { key: 'Prove', pos: 'mid', at: ['included', 'how', 'features', 'proof'], fb: ['benefits', 'solution'], job: 'Back the promise with evidence that exists in the brief: exact contents, the process, supplied proof. If there is no real proof, prove with specifics, never with invented testimonials.' },
+      { key: 'Push', pos: 'end', at: ['offer', 'final'], fb: [], job: 'Nudge to the next step: clear offer, low-friction CTA, and a reason to act that is true.' }
+    ],
+    headline: 'The headline pictures the achieved outcome as a concrete situation. The subheadline carries the promise and the audience.',
+    body: 'Start from the end result and work backwards to the product. Every promise made must be followed by something concrete in Prove.',
+    transitions: 'Move from picture to promise ("Here is how"), from promise to proof ("Here is what is inside"), from proof to push ("Ready when you are") using short connecting lines.',
+    cta: 'CTA wording continues the picture ("Start..."/"Mulai...", "Get..."). Gentle push, no pressure language, same primary label throughout.',
+    validate: ['The first screen shows a concrete outcome, not only a product name.', 'Each promise has matching evidence in the Prove sections.', 'The push contains no invented scarcity.'],
+    secondary: { targets: ['hero', 'included', 'proof', 'how'], text: 'Use the Picture idea in the hero subheadline and the Prove idea in the contents, process or proof sections.' }
+  },
+  fab: {
+    purpose: 'Turn a list of things the product has into reasons to buy, by always travelling from feature to advantage to benefit.',
+    stages: [
+      { key: 'Feature', pos: 'mid', at: ['features', 'included', 'how'], fb: ['solution', 'benefits'], job: 'State exactly what exists, using only features and contents named in the brief. Never add a feature that was not supplied.' },
+      { key: 'Advantage', pos: 'mid', at: ['features', 'included', 'how'], fb: ['solution', 'benefits'], job: 'Say what that feature lets the customer do or why it is better than the usual alternative.' },
+      { key: 'Benefit', pos: 'mid', at: ['benefits', 'features', 'included'], fb: ['solution'], job: 'Say what changes in the customer life or work as a result, in terms the target audience cares about.' }
+    ],
+    headline: 'Build the headline from the strongest benefit (not from a feature), and let the subheadline name the key feature that makes it possible.',
+    body: 'Write 3 to 6 feature units. Each unit is a short block that contains all three parts in order: feature, advantage, benefit. Headings lead with the benefit, details show the feature. Do not stop at a bullet list of features.',
+    transitions: 'Group units by customer goal (for example saves time, reduces mistakes) and introduce each group with one sentence that links it to the audience.',
+    cta: 'CTA refers to the main benefit or the set of features together ("Get all ... "), placed after the feature units and in the closing band.',
+    validate: ['Every important feature is followed by an advantage and a benefit.', 'No feature appears that is missing from the brief.', 'Benefits differ from each other and are not reworded repeats.'],
+    secondary: { targets: ['features', 'included', 'benefits'], text: 'Use FAB only for the feature, included and benefit blocks: every item gets feature, advantage and benefit.' }
+  },
+  bab: {
+    purpose: 'Show a believable before, a modest after, and the product as the bridge between them.',
+    stages: [
+      { key: 'Before', pos: 'start', at: ['problem'], fb: ['hero'], job: 'Describe the current situation of the reader, concretely and without exaggeration.' },
+      { key: 'After', pos: 'mid', at: ['solution', 'benefits'], fb: ['hero'], job: 'Describe the realistic improved situation. Modest, specific, and free of guaranteed results or timelines you cannot support.' },
+      { key: 'Bridge', pos: 'mid', at: ['how', 'included', 'solution', 'offer'], fb: ['benefits'], job: 'Explain how the product gets them from Before to After: the steps, the contents, the support supplied in the brief.' }
+    ],
+    headline: 'The headline expresses the shift ("from X to Y") or the After state in concrete terms. Avoid dramatic or unprovable transformations.',
+    body: 'Mirror the structure: a Before block, an After block that contrasts directly with it, then the Bridge. Use parallel wording so the contrast is obvious.',
+    transitions: 'Use a clear hinge between Before and After ("Now picture...") and another into Bridge ("The way there is..."). Reuse the same nouns in Before and After so the change is visible.',
+    cta: 'CTA invites the reader to start crossing the bridge ("Start...", "Begin..."), placed after the Bridge and in the closing band.',
+    validate: ['A recognisable Before and a contrasting After both appear.', 'The After makes no guaranteed or numeric result claims that the brief lacks.', 'The Bridge shows how, using only supplied facts.'],
+    secondary: { targets: ['solution', 'benefits', 'how'], text: 'Use BAB inside the benefits or solution blocks to contrast the old and new situation.' }
+  },
+  pastor: {
+    purpose: 'Long-form persuasion that walks from the problem to a response, with a short story in the middle.',
+    stages: [
+      { key: 'Problem', pos: 'start', at: ['problem'], fb: ['hero'], job: 'Name the main problem clearly in the first lines.' },
+      { key: 'Amplify', pos: 'start', at: ['problem'], fb: ['hero', 'solution'], job: 'Show the consequence of leaving it unsolved in practical terms. No fabricated stakes.' },
+      { key: 'Story', pos: 'mid', at: ['solution', 'proof'], fb: ['hero', 'benefits'], job: 'A short story or origin only from facts supplied in this brief. If no story facts exist, write a brief honest "why this exists" using only the description; never invent a personal tale, case study or testimonial.' },
+      { key: 'Transformation', pos: 'mid', at: ['benefits', 'solution'], fb: ['hero'], job: 'Describe what changes for the customer, realistic and specific.' },
+      { key: 'Offer', pos: 'end', at: ['offer', 'included', 'bonus'], fb: ['benefits', 'final'], job: 'Present exactly what they get, the supplied price and bonuses, and how access works.' },
+      { key: 'Response', pos: 'end', at: ['final', 'offer'], fb: [], job: 'Ask for the action directly and tell the reader exactly what happens after they click.' }
+    ],
+    headline: 'The headline states the problem or the transformation promise in one strong line. The subheadline hints at the story or the way out.',
+    body: 'Follow the six stages in order as a continuous argument. Use more narrative flow than other formulas, with short paragraphs and a human voice, but stay inside supplied facts.',
+    transitions: 'Each stage hands over to the next with a short linking sentence. The Story must connect to the Transformation by naming what changed.',
+    cta: 'The Offer states price and contents; the Response is a direct, specific CTA. Repeat the primary CTA after Transformation as well.',
+    validate: ['All six stages are present in order, or merged where a section is off.', 'The Story uses only supplied facts and contains no invented testimonial or personal anecdote.', 'The Offer uses the exact supplied prices.'],
+    secondary: { targets: ['problem', 'solution', 'offer'], text: 'Use the PASTOR flow for the problem, story and offer blocks (Amplify, Story, Offer).' }
+  },
+  '4u': {
+    purpose: 'A headline lens: every headline and subheadline must be useful, unique, ultra-specific, and urgent only when that is real.',
+    stages: [
+      { key: 'Useful', pos: 'start', at: ['hero', 'final'], fb: [], job: 'The headline promises something the target reader actually wants or needs.' },
+      { key: 'Urgent', pos: 'start', at: ['hero', 'offer', 'final'], fb: [], job: 'Only if the brief states a real deadline, limit or time-bound offer. Otherwise leave urgency out completely.' },
+      { key: 'Unique', pos: 'start', at: ['hero', 'solution'], fb: [], job: 'Say what differs from the alternatives, based only on facts in the brief.' },
+      { key: 'Ultra-specific', pos: 'start', at: ['hero', 'benefits', 'final'], fb: [], job: 'Use concrete nouns, formats, audiences, counts or outcomes found in the brief, not vague adjectives.' }
+    ],
+    headline: 'Draft several headlines internally and score each on the four U. Keep the best one and keep it under about 12 words.',
+    body: 'Apply the lens to the hero headline, subheadline, every section heading, and the closing headline. Body text stays plain and informative.',
+    transitions: 'Section headings should read as a sequence of specific promises, not labels like "Benefits" or "About".',
+    cta: 'CTA label is itself specific (names the product or outcome) rather than "Click here" or "Submit".',
+    validate: ['Each heading is specific enough that it could not be pasted onto a different product.', 'No urgency appears unless the brief provides a real reason.', 'Headings are not repeated in different words.'],
+    secondary: null
+  }
+};
+
+/* Goal-specific CTA strategy used by the copy engine. */
+const GOAL_CTA = {
+  digital: 'Name the action and what they get (for example "Get the [product name]"). If no label is supplied, propose one. Place the primary CTA in the hero, after the offer and at the end. Under the button add one line of real reassurance only if the brief supports it (for example how access is delivered).',
+  service: 'Make the CTA a low-friction next step such as booking or asking a question. State what happens after the click (for example a reply or a short consultation). Do not promise availability or response times that are not in the brief.',
+  leads: 'Offer a clear exchange: what they get for their contact details. Keep the form ask minimal, and use a verb that names the benefit rather than "Submit".',
+  brand: 'Invite the visitor to connect, collaborate or follow. Offer two clear paths at most (for example message and see work), with one primary.',
+  physical: 'Use a purchase verb with the product name or variant. Show price and any facts about the product before the button. Never invent shipping, stock or warranty terms.',
+  course: 'Make the CTA about joining or starting. Say what they gain by joining (for example access to the lessons described) and how the learning is delivered if the brief says so.',
+  other: 'Derive the CTA from the main action described in the brief and keep it specific.'
+};
+
+/* The unique job each section must do. Used to stop copy repeating itself. */
+const SECTION_JOB = {
+  hero: 'Say what it is, who it is for and the single outcome. Show the primary CTA.',
+  problem: 'Name the reader situation and its practical cost. Introduces no product claims.',
+  solution: 'Introduce the product as the answer: what it is, how it approaches the problem, who it suits.',
+  benefits: 'Translate the product into different outcomes. One distinct outcome per line, never rewordings.',
+  features: 'List the concrete capabilities, each tied to why it matters to this audience.',
+  how: 'Show the path to the result in 3 or 4 simple steps. Lowers effort anxiety.',
+  included: 'Itemise exactly what the buyer receives, using only what the brief states.',
+  proof: 'Real evidence only. If none was supplied, omit the section or use truthful trust elements such as exact contents or process.',
+  offer: 'Price, what is being bought, how access works and one CTA. Resolve the last objection.',
+  bonus: 'Extras supplied in the brief, positioned as added value. Never invent a bonus.',
+  faq: 'Answer 4 to 6 real doubts that earlier sections did not already cover. Every answer adds new information.',
+  final: 'Restate the outcome in one line and show one CTA. No new arguments.'
+};
+
+function enabledSectionIds(p) { return p.sections.filter(function (s) { return s.enabled; }).map(function (s) { return s.id; }); }
+function sectionNameOf(id) { return SECTION_BY_ID[id] ? SECTION_BY_ID[id].name : id; }
+
+function resolveStageSections(st, on) {
+  let ids = st.at.filter(function (id) { return on.indexOf(id) !== -1; });
+  if (!ids.length && st.fb) ids = st.fb.filter(function (id) { return on.indexOf(id) !== -1; });
+  if (!ids.length && on.length) ids = [st.pos === 'end' ? on[on.length - 1] : st.pos === 'mid' ? on[Math.floor((on.length - 1) / 2)] : on[0]];
+  ids.sort(function (a, b) { return on.indexOf(a) - on.indexOf(b); });
+  return ids.slice(0, 4);
+}
+
+/* Which formula leads, which support it, and where each stage lands. */
+function resolveFormulaPlan(p) {
+  const c = p.content, on = enabledSectionIds(p);
+  const chosen = (c.formulas || []).filter(function (id) { return FORMULA_SPECS[id]; });
+  const lens4u = chosen.indexOf('4u') !== -1;
+  const frames = chosen.filter(function (id) { return id !== '4u'; });
+  let primary, secondary = [], auto = false, note = '';
+  if (!frames.length) {
+    auto = true; primary = 'aida';
+    if (String(p.brief.problem || '').trim() && on.indexOf('problem') !== -1) secondary = ['pas'];
+    note = chosen.length ? '4U only shapes headlines, so AIDA is used as the page skeleton.' : 'No formula was chosen, so AIDA leads and PAS supports the problem and solution blocks where a problem was supplied.';
+  } else {
+    primary = frames[0]; secondary = frames.slice(1);
+    note = frames.length > 1 ? 'The first formula chosen is the page skeleton. The others are applied only to the blocks named below.' : '';
+  }
+  const spec = FORMULA_SPECS[primary];
+  const stages = spec.stages.map(function (st) { return { key: st.key, job: st.job, sections: resolveStageSections(st, on) }; });
+  const support = secondary.map(function (id) {
+    const s = FORMULA_SPECS[id].secondary;
+    const targets = s ? s.targets.filter(function (t) { return on.indexOf(t) !== -1; }) : [];
+    return { id: id, text: s ? s.text : '', targets: targets, applied: targets.length > 0 };
+  });
+  return { primary: primary, secondary: support, lens4u: lens4u, auto: auto, note: note, stages: stages, spec: spec };
+}
+
+function hasUrgencySource(p) {
+  const t = [p.content.notes, p.content.brandNotes, p.content.headline].join(' ');
+  return /deadline|batas waktu|sampai tanggal|hingga tanggal|berakhir|until|ends on|limited|terbatas|kuota|early bird|hari terakhir|last day/i.test(t);
+}
+function hasStoryFacts(p) { return !!(String(p.content.brandNotes || '').trim() || String(p.content.socialProof || '').trim() || String(p.content.notes || '').trim()); }
+
+/* =====================================================================
+   STYLE DNA ENGINE
+   One DNA record per style id. Existing style objects (palette, fonts,
+   fit...) are untouched; DNA adds the structural grammar. Styles added
+   later without DNA fall back to deriveDNA() so nothing breaks.
+   ===================================================================== */
+const STYLE_DNA = {
+  mono: {
+    sig: 'A printed fashion or architecture magazine: black ink on white, big serif type, ruled columns, no boxes.',
+    roles: 'Ink does everything: text, rules and the primary button. There is no second hue. Surface tint is only for rare quiet fields.',
+    type: 'Display: oversized light-weight serif, tracking about -0.03em, line-height near 0.95; hero headline 56 to 96px on desktop, 34 to 44px on phones. Labels: 11 to 12px uppercase sans, +0.16em tracking. Body: neutral sans 16 to 17px, line-height 1.6, always left aligned.',
+    headline: 'The headline is the dominant graphic element, left aligned, allowed to break over three or four lines. At most one italic or underlined word.',
+    hero: 'Asymmetric two columns: a very large headline column (about 60 to 65%) and a tall 3:4 solid black or desaturated image block on the right, aligned to the bottom of the text. A 2px black rule runs under a small uppercase masthead.',
+    rhythm: 'Sections are separated by full-width 1px black rules, never by boxes or background fills. Use an editorial grid: a narrow left column holding the numbered uppercase section label, a wide right column holding the content.',
+    text: 'Problem and solution read as editorial copy: label column left, a 60ch paragraph column right, opening sentence set larger in serif like a standfirst.',
+    list: 'Numbered editorial rows: large serif numeral at left, bold title and one-line explanation at right, a 1px rule above every row. No cards, no icons.',
+    card: 'No cards. Product facts form a ruled table-like block: uppercase label left, value right, hairline between rows. Square corners and no shadow.',
+    proof: 'Real quotes as large serif pull-quotes with an em-dash attribution, separated by rules. If no proof exists, omit.',
+    pricing: 'Price set large in light serif, regular price struck through in grey beside it, included items as ruled rows below, CTA left aligned directly under.',
+    badge: 'No pill badges. Labels are small uppercase text with a 1px black underline, or a square 1px outlined tag.',
+    button: 'Solid black rectangle, 0 radius, white uppercase text 12 to 13px with +0.16em tracking, padding about 18px 32px, no shadow.',
+    secondary: 'Underlined black text link with an arrow character, same size as the button text. Never a second filled button.',
+    surface: '1 to 2px black rules only. No shadows, no gradients, no rounded corners.',
+    image: 'Black and white or strongly desaturated, tall 3:4 crops. With no image, a solid black block with a giant serif initial.',
+    space: 'Strict left-aligned grid. About 96px vertical section padding on desktop and 56px on phones.',
+    faq: 'Ruled rows: serif question, plus or minus sign at the far right, 1px rule between rows. No boxes.',
+    final: 'A full-bleed black band, a giant white serif closing line, and a white rectangular button.',
+    states: { web: 'On hover invert the primary button (white fill, black text, 1px black border). Always show a visible focus outline.', lynk: 'No hover states. The button is static and recognisable by its solid black fill.' },
+    forbidden: ['rounded corners', 'drop shadows', 'gradients', 'colour accents', 'decorative icons', 'a centered hero', 'card grids', 'pill buttons'],
+    lynk: 'Draw rules with border-top:1px solid #0B0B0B on inline-styled divs. Build the two-column hero as a flex-wrap container whose children use flex:1 1 260px so it stacks on phones with the headline first and the black block after. Numerals are inline-block spans.'
+  },
+  luxury: {
+    sig: 'A quiet private-members brand: charcoal ground, muted gold hairlines, centered symmetry and a lot of empty space.',
+    roles: 'Charcoal is the stage; warm ivory is text; gold is reserved for hairlines, labels, numerals and the primary button. Never use gold for large fills.',
+    type: 'Display: high-contrast serif (Didone feel) at 36 to 64px, normal weight, +0.01em tracking, centered. Labels: small capitals at 11px with +0.3em tracking in gold. Body: light sans 15 to 16px, line-height 1.8, muted ivory.',
+    headline: 'Centered, short lines (max about 16 characters per line), calm and symmetrical, never bold. Allow a thin gold rule 40px wide beneath.',
+    hero: 'Centered and symmetrical: small tracked capitals masthead, headline centered, then an inset image in a thin gold hairline frame with 12px padding between image and frame, about half the container width, then the button. Generous empty space around everything.',
+    rhythm: 'Every section is a centered column with very large vertical padding (about 120px desktop, 72px phones), separated by a 40px gold hairline or a thin full rule. Sections do not use background boxes.',
+    text: 'Centered paragraphs at about 52ch with a small tracked-caps eyebrow above each heading.',
+    list: 'Three or four evenly spaced columns separated by vertical hairlines, each with a gold serif numeral, a small caps title and a light line of text. On phones stack them with a hairline between. No icons, no boxes.',
+    card: 'No rounded cards. Where a container is needed use an inner frame: 1px gold hairline, 2px radius at most, with a second inset hairline offset by 8px.',
+    proof: 'One quote at a time, centered, italic serif, gold quotation mark, attribution in small caps. Omit if no real proof.',
+    pricing: 'Hierarchy through type, not decoration: small caps label, price in large light serif in gold, regular price struck through in muted ivory, one hairline, then the button. No badges or starbursts.',
+    badge: 'Tiny tracked capitals in gold, either plain or between two short hairlines. Never filled pills.',
+    button: 'Primary: transparent fill, 1px gold border, gold text in tracked small capitals, padding about 18px 40px, 0 to 2px radius. It may fill with gold and charcoal text where it is the single final action.',
+    secondary: 'Plain tracked-caps text link in muted ivory with a thin underline.',
+    surface: '1px hairlines in gold at low opacity. No drop shadows, no glows, no gradients.',
+    image: 'Dark, moody editorial crops with warm highlights, shown inside the inset hairline frame.',
+    space: 'Whitespace is the luxury signal. Keep text columns narrow and let empty space dominate.',
+    faq: 'Centered accordion: serif question between two hairlines, small plus sign in gold, answer in light sans.',
+    final: 'Charcoal-on-slightly-lighter band with a single centered serif sentence, a gold hairline above it and one outlined gold button.',
+    states: { web: 'On hover fill the primary button with gold and switch the text to charcoal. Keep a visible focus outline.', lynk: 'No hover states. Keep the outlined gold button static.' },
+    forbidden: ['bright saturated colours', 'playful shapes', 'bold sans headlines', 'crowded layouts', 'glow effects', 'rounded modern cards', 'drop shadows'],
+    lynk: 'Set the page background on the root div to charcoal. Build hairlines with border-top:1px solid with a gold rgba value. The inset frame is two nested divs with 1px borders. Center everything with text-align:center and margin:0 auto.'
+  },
+  neo: {
+    sig: 'A loud poster pinned to a cork board: cream paper, thick black outlines, hard offset shadows and sticker labels.',
+    roles: 'Cream is the paper; black is every outline and all text; red is the main shout colour; yellow marks buttons, highlights and stickers. White only inside boxes.',
+    type: 'Display: ultra-heavy sans (Arial Black or Impact feel), uppercase, tight tracking (-0.02em), line-height 0.98, 40 to 80px, mixed sizes allowed. Body: monospace 15 to 16px, line-height 1.6. Labels: monospace uppercase bold.',
+    headline: 'Uppercase, very heavy, with one key phrase highlighted on a yellow block with a 3px black border. A headline may sit slightly rotated (about -1.5 degrees).',
+    hero: 'Asymmetric blocks: headline on cream at left, a thick-bordered image frame with an 8px hard shadow slightly rotated (about 2 degrees) at right, a rotated sticker label overlapping the frame corner, and a yellow block behind the frame.',
+    rhythm: 'Alternate section backgrounds between cream and a warm yellow-cream, each separated by a 3px black rule. Section titles sit on a yellow tag with a 3px border and a 5px hard shadow. Overlap blocks by a few pixels on purpose, but keep reading order clear.',
+    text: 'Copy sits in a white box with a 3px black border and a 6px hard shadow, or on open cream with a bold black first sentence.',
+    list: 'Outlined boxes (3px black border, 5px hard shadow, white fill) with a coloured square number tag; every second box rotated about 0.8 degrees. Two columns on desktop, one on phones.',
+    card: 'White fill, 3px solid black border, 0 to 4px radius, zero-blur offset shadow of 6px in black. Price sits in a coloured tag at the top corner. Badge overlaps the border.',
+    proof: 'Quote on a yellow box with a thick border and a rotated sticker for the attribution. Omit if no real proof.',
+    pricing: 'Price on a red block with white text, 3px black border and a 5px hard shadow; regular price struck through next to it in black; the CTA sits right underneath as a yellow block.',
+    badge: 'Sticker style: rotated about -3 degrees, yellow or red fill, 3px black border, uppercase monospace bold.',
+    button: 'Yellow fill, 3px solid black border, 0 radius, black uppercase heavy text 15 to 17px, padding about 16px 28px, 6px hard black shadow.',
+    secondary: 'White-fill button with the same 3px border but no shadow, or an uppercase underlined mono link.',
+    surface: 'Every container has a 3px black border. Shadows are hard offsets with 0 blur, never soft. No gradients, no transparency.',
+    image: 'Inside a 3px bordered frame with an offset shadow and a flat colour block behind it. No soft crops.',
+    space: 'Dense but organised: 56 to 72px section padding, tight gaps between boxes (16 to 20px).',
+    faq: 'Each question is its own white box with a 3px border and 4px hard shadow, plus sign in a yellow square.',
+    final: 'Full red band with black rule above, a huge uppercase heading on a yellow tag, and the yellow shadowed button.',
+    states: { web: 'On hover translate the button by 3px right and down and reduce its shadow to 3px. Keep a visible focus outline.', lynk: 'No hover or press states. Render the button with its static 6px hard shadow.' },
+    forbidden: ['soft shadows', 'delicate gradients', 'thin hairlines', 'glass effects', 'muted pastel palettes', 'rounded pill buttons'],
+    lynk: 'box-shadow:6px 6px 0 #111 and transform:rotate(-2deg) are allowed inline. Do not use pseudo-elements: build stickers and tags as inline-block spans. Keep rotations small and make sure rotated blocks do not cause horizontal overflow (put overflow:hidden on the section wrappers).'
+  },
+  nature: {
+    sig: 'A ceramic studio or herbal shop: sand paper tones, moss and terracotta, warm serif type and soft organic shapes.',
+    roles: 'Sand is the page; moss green is the primary action and key accents; terracotta is a small warm accent for links and emphasis; deep green-black is text.',
+    type: 'Display: warm, slightly soft serif at 34 to 60px with italic emphasis on one phrase, normal to semibold weight. Body: humanist sans 16 to 17px, line-height 1.7. Labels: italic serif, sentence case.',
+    headline: 'Left aligned or gently centered, sentence case, with one italic phrase in terracotta. Friendly and unhurried.',
+    hero: 'Text at left, and at right an image cropped into an organic blob mask (for example border-radius 58% 42% 55% 45% / 48% 56% 44% 52%) with a small leaf-shaped motif overlapping its edge. The hero sits on sand with a soft curved edge into the next section.',
+    rhythm: 'Sections flow into each other with large curved top edges (border-radius about 44px 44px 0 0) and alternating sand and deeper sand backgrounds. Use leaf-shaped dividers instead of straight rules.',
+    text: 'Short paragraphs at 55ch, sometimes next to an organic-shaped image. Open with an italic serif lead sentence.',
+    list: 'Two-column list with leaf-shaped markers (border-radius 0 100% 0 100%) in moss green, bold title, soft supporting line. No boxes.',
+    card: 'Soft containers: deeper-sand fill, asymmetric large radius (for example 32px 32px 32px 8px), 1px sand-dark border, very light shadow at most. Image sits at the top in an organic mask.',
+    proof: 'A quote on a deeper-sand organic shape with a small leaf mark and the name in italic. Omit if no real proof.',
+    pricing: 'Price in warm serif in terracotta on a soft rounded sand panel; regular price struck through lighter; CTA is a moss pill directly beneath.',
+    badge: 'Small rounded pill in a pale moss tint with moss text, or a leaf-shaped tag. No heavy outlines.',
+    button: 'Pill (fully rounded) moss-green fill, cream text, 15 to 16px, padding about 14px 30px, no border, at most a very light shadow.',
+    secondary: 'Terracotta underlined text link, or a pill with a 1px moss outline and moss text.',
+    surface: 'Soft 1px sand-dark borders and very light shadows. No hard black borders, no brutalist offset shadows.',
+    image: 'Natural light and earthy tones, cropped into organic masks (blob, arch or leaf).',
+    space: 'Relaxed, generous breathing room: about 88px section padding desktop, 56px phones.',
+    faq: 'Soft rows separated by dashed or dotted sand-dark lines, a small leaf or plus marker, answers revealed in plain text.',
+    final: 'Moss green band with a large curved top edge, cream serif closing line and a cream pill button with moss text.',
+    states: { web: 'On hover darken the pill slightly and lift it by 1px. Keep a visible focus outline.', lynk: 'No hover states. Keep the pill static.' },
+    forbidden: ['neon colours', 'hard black borders', 'sharp tech visuals', 'cold greys', 'heavy drop shadows', 'brutalist offset shadows'],
+    lynk: 'Organic masks use inline border-radius with the slash syntax. Draw leaf markers as small inline-block spans with border-radius:0 100% 0 100%. Curved section tops use border-radius on the section wrapper.'
+  },
+  serene: {
+    sig: 'A silent spa brochure: wide whitespace, one calm centered column, sage lines and almost no decoration.',
+    roles: 'Warm off-white page; deep sage-grey text; sage green only for hairlines, numerals and the outlined button. Nothing saturated.',
+    type: 'Display: light-weight sans (weight 300) at 30 to 54px, relaxed tracking, centered. Body: same sans 16px, line-height 1.9, narrow measure (about 46ch). Labels: tiny uppercase with +0.3em tracking in muted sage.',
+    headline: 'Centered, light weight, short, with plenty of space around it. No bold, no uppercase.',
+    hero: 'One calm centered column: tiny tracked label, headline, one supporting line, then a small image about 46% wide with very low contrast and big margins, then a thin outlined button. Vast empty space above and below.',
+    rhythm: 'A single narrow column (max about 640px) with very large vertical gaps (120px desktop, 80px phones), separated only by a 1px sage hairline between sections. No background changes except the final band.',
+    text: 'Centered short paragraphs, each at most three lines, with generous leading.',
+    list: 'Spaced rows separated by hairlines: an outlined circle numeral, then a centered title and one soft line. One column only, no grids.',
+    card: 'No cards. Everything sits directly on the page, separated by hairlines. Image has a 2px radius at most.',
+    proof: 'A single centered quote in light sans, with the name below in tiny tracked caps. Omit if no real proof.',
+    pricing: 'Price in light weight at a moderate size, regular price struck through in muted sage, hairline, then a thin outlined button. No badges.',
+    badge: 'Tiny tracked uppercase text in muted sage, no container.',
+    button: 'Thin 1px sage outline, transparent fill, ink text with +0.12em tracking, 2px radius, padding about 14px 34px.',
+    secondary: 'Plain muted text link with a thin underline.',
+    surface: '1px sage hairlines only. No shadows, no gradients, no strong colour fills.',
+    image: 'Soft, airy, low contrast photography with large margins around it.',
+    space: 'Space is the design. When in doubt remove an element rather than add one.',
+    faq: 'Hairline-separated rows with a light plus sign; question in light sans, answer in muted text.',
+    final: 'A soft surface-tinted band with one centered sentence and the thin outlined button.',
+    states: { web: 'On hover fill the button softly with sage at 15% opacity. Visible focus outline.', lynk: 'No hover states. Keep the outlined button static.' },
+    forbidden: ['heavy black borders', 'saturated colours', 'dense grids', 'loud badges', 'bold weights', 'drop shadows', 'multi-column card layouts'],
+    lynk: 'Constrain the inner wrapper with max-width and margin:0 auto, text-align:center. Use border-top:1px solid for hairlines. Use large inline padding for the vertical gaps.'
+  },
+  playful: {
+    sig: 'A children learning-app poster: flat bright colours, circles, triangles and squares as friendly anchors.',
+    roles: 'Cream page, deep navy text, cobalt blue as the main colour, sunny yellow as highlight and button underlay, one small pink accent for shapes.',
+    type: 'Display: rounded bold sans (weight 800) at 34 to 66px with a yellow highlighter bar behind one key word. Body: same family, 17px, line-height 1.6, short friendly sentences. Labels: bold, sentence case.',
+    headline: 'Left aligned, very bold, with a hand-marked yellow highlight behind one or two words.',
+    hero: 'Text left; right a stack of overlapping flat shapes (a large blue circle, a yellow triangle, a pink rounded square) forming a composition with the product image or initial on top. A top bar in cobalt with white brand name.',
+    rhythm: 'A stable grid with alternating cream and pale-blue bands. Each section has one small geometric shape as its visual anchor (circle, triangle or square). Rounded section edges are not used.',
+    text: 'Short, friendly blocks of text next to a shape; headings carry the yellow highlight bar.',
+    list: 'Three-up tiles: each with a different shape marker (circle, rounded square, leaf-triangle) in a different colour, bold title, short line. White fill, 2px navy outline, 14px radius. Stack on phones.',
+    card: 'White fill, 2px navy outline, 14px radius, flat colour fills, no gradients, no soft shadows. A shape sits in the top corner.',
+    proof: 'A speech-bubble style box with a flat fill and shape-based avatar. Omit if no real proof.',
+    pricing: 'Price very large in cobalt on a white rounded tile with a yellow offset underlay; regular price struck through; CTA button directly under.',
+    badge: 'Rounded pill in yellow with navy bold text, or a small shape with a short word.',
+    button: 'Solid cobalt, white bold text, 14px radius, padding about 16px 30px, with a solid yellow offset underlay (0 6px 0 yellow).',
+    secondary: 'White button with a 2px navy outline and navy text, same radius, no underlay.',
+    surface: 'Flat solid fills; outlines 2px in navy where needed. No gradients, no blurred shadows.',
+    image: 'Cutout or flat illustration on a solid colour shape; shapes may frame the image.',
+    space: 'Comfortable and airy: 72 to 88px section padding.',
+    faq: 'Each question in its own rounded white tile with a 2px navy outline and a shape-based plus marker.',
+    final: 'Full cobalt band, white heading, yellow button with a navy underlay and a couple of shapes at the edges.',
+    states: { web: 'On hover reduce the underlay to 3px and shift the button down 3px. Visible focus outline.', lynk: 'No hover states. Keep the static underlay shadow.' },
+    forbidden: ['realistic textures', 'thin luxurious serifs', 'muted palettes', 'too many shapes behind text', 'gradients', 'soft glows'],
+    lynk: 'Draw shapes as inline-block divs with border-radius:50% (circle) or CSS borders for triangles (inline border trick), no pseudo-elements. Keep shapes absolutely positioned only inside wrappers that have position:relative and overflow:hidden.'
+  },
+  softfem: {
+    sig: 'A boutique editorial: blush and ivory fields, plum type, italic serif accents, arch-shaped imagery and fine rules.',
+    roles: 'Ivory-blush page; plum for text, rules and the primary button; lilac and blush as soft colour fields behind imagery and in alternating bands.',
+    type: 'Display: high-contrast serif at 34 to 62px with italic emphasis on key words, normal weight. Body: clean humanist sans 16px, line-height 1.7. Labels: small italic serif or spaced small caps in plum.',
+    headline: 'Left aligned, large, with one or two italic words in plum. Elegant and calm, never shouty.',
+    hero: 'Editorial split: text left, and at right a tall arch-shaped image (top fully rounded, bottom nearly square, 3:4) on a lilac field, with a small star mark and a thin plum rule. Alternating image and text bands follow.',
+    rhythm: 'Alternating bands in ivory, blush and lilac. Thin plum rules and small four-point star marks separate sections. Alternate image-left and image-right compositions.',
+    text: 'Serif lead sentence in italics followed by sans body, sometimes beside an arch image.',
+    list: 'Elegant numbered rows: italic serif numeral in plum, title, supporting line, fine blush rule beneath each. No heavy boxes.',
+    card: 'Soft colour field with 4px radius or an arch-topped image; fine 1px plum-tinted border. Name and price sit under the image in serif.',
+    proof: 'Large italic serif quote on a lilac field with an arch image. Omit if no real proof.',
+    pricing: 'Price in italic serif plum at a large size, regular price struck through in muted plum, fine rule, then the plum button.',
+    badge: 'Small italic label or a four-point star plus short word in plum; optional lilac pill with 1px border.',
+    button: 'Solid plum fill, cream text, 4px radius, medium weight with +0.06em tracking, padding about 14px 30px.',
+    secondary: 'Outlined plum button with the same radius, or an italic underlined link.',
+    surface: 'Fine 1px plum-tinted rules and soft colour fields instead of boxes; no heavy shadows, no thick borders.',
+    image: 'Portrait or lifestyle photography with soft light, always cropped to an arch.',
+    space: 'Spacious editorial spacing: 80 to 96px desktop padding, 56px phones.',
+    faq: 'Fine-ruled rows, question in serif, italic plus sign in plum, answer in sans.',
+    final: 'A lilac band with a large italic serif closing line and the plum button, star marks either side.',
+    states: { web: 'On hover darken the plum slightly. Visible focus outline.', lynk: 'No hover states. Keep the plum button static.' },
+    forbidden: ['overly sugary pink', 'crowded boxes', 'thick borders', 'low-contrast grey text', 'neon colours', 'brutalist shadows'],
+    lynk: 'Arch shape: border-radius:999px 999px 4px 4px on the image wrapper with overflow:hidden. Draw star marks as a small inline SVG or a text character. Rules are border-top:1px solid with a plum rgba value.'
+  },
+  vibrant: {
+    sig: 'A confident product-launch page: strong cobalt colour fields, a split hero, big prices and unmissable buttons.',
+    roles: 'White page and near-black navy text; cobalt is the big colour field and the primary button; yellow is the highlight for the CTA on blue and for badges.',
+    type: 'Display: bold compact sans (weight 800) at 36 to 58px, tight tracking (-0.03em), line-height 1.0. Body: clean sans 16px. Prices: extra bold and large (36 to 60px). Labels: uppercase 11px with +0.12em tracking.',
+    headline: 'Left aligned, white on the cobalt field, compact and punchy, max about 10 words.',
+    hero: 'Split hero with no padding: the left half is a full cobalt colour field with eyebrow, white headline and a yellow button; the right half is a yellow or tinted field holding a clean product shot or product initial on a white tile. On phones stack the blue block first.',
+    rhythm: 'Product-forward and tidy: alternate white and pale-tint bands, headings with an 8px yellow bar at their left edge, content aligned on one clean grid.',
+    text: 'Short bold lead line then 2 to 3 lines of body text, aligned left on the grid.',
+    list: 'A tidy ruled grid: 3 columns on desktop in one outlined container with 1px light borders between cells, each cell with a small cobalt square number or tick, bold title and one line. Stack on phones.',
+    card: 'White product card: 1px light border, 8px radius, no shadow; the product on a colour field above, name, price in extra bold, button below. Colour fields carry the weight, not shadows.',
+    proof: 'Quote cell inside the same ruled grid, or a pale-tint band with bold quote text. Omit if no real proof.',
+    pricing: 'The strongest element on the page: a cobalt block with the price in huge white extra bold, regular price struck through in light blue, yellow badge showing the saving only if both prices are supplied, and a yellow button.',
+    badge: 'Solid yellow rectangle (4px radius) with bold navy uppercase text, or a cobalt small tag.',
+    button: 'Large rectangular button, 8px radius, cobalt fill with white bold text (or yellow with navy text on cobalt), padding about 16px 32px, full width on phones.',
+    secondary: 'Outlined 2px cobalt button with cobalt text, same size, no fill.',
+    surface: 'Colour fields instead of shadows; 1px light borders for structure. No heavy drop shadows, no gradients.',
+    image: 'Clean product shots on a flat colour field with strong crops.',
+    space: 'Efficient and tidy: 64 to 80px desktop section padding, 44px phones.',
+    faq: 'Ruled rows inside a clean container with a bold question and a cobalt plus sign.',
+    final: 'Full yellow band with navy bold headline and a cobalt button, price repeated if supplied.',
+    states: { web: 'On hover darken the cobalt slightly and lift by 1px. Visible focus outline.', lynk: 'No hover states. Keep buttons static.' },
+    forbidden: ['rainbow palettes', 'many decorative shapes', 'soft pastel washes', 'heavy shadows', 'centered thin serif luxury styling'],
+    lynk: 'Build the split hero with a flex-wrap container: each half flex:1 1 240px, the blue half first. Colour fields are just background-color on inline-styled divs. Grid cells use display:flex with flex-wrap and border-right/border-bottom 1px.'
+  }
+};
+
+function deriveDNA(s) {
+  const avoid = String(s.avoid || '').split(/,\s*/).filter(Boolean);
+  return {
+    sig: s.description || s.name, roles: 'Use the palette roles consistently: background, surface, text, muted text, lines, accent and secondary accent.',
+    type: s.typography, headline: s.typography, hero: s.layout, rhythm: s.layout, text: s.layout, list: s.components, card: s.components, proof: s.components,
+    pricing: 'Show price prominently with the style typography; regular price struck through if both prices exist.', badge: s.components,
+    button: s.cta, secondary: 'Quieter than the primary: a text link or an outlined button.', surface: s.components, image: s.image, space: s.layout,
+    faq: s.components, final: s.cta,
+    states: { web: 'Subtle hover feedback and a visible focus outline.', lynk: 'No hover states. Keep elements static.' },
+    forbidden: avoid, lynk: 'Translate every effect into inline CSS that needs no pseudo-elements.'
+  };
+}
+function getDNA(style) { return STYLE_DNA[style.id] || deriveDNA(style); }
+
 /* Text used inside the mockup (not the app UI). */
 const L10N = {
   en: {
@@ -255,7 +655,8 @@ const L10N = {
            physical: 'Shop now', course: 'Join the course', other: 'Learn more' },
     forAudience: 'For ', yourProduct: 'Your product', placeholder: 'Content for this part will be written from your brief.',
     noPrice: 'No price entered yet.', noProof: 'No real proof provided. The prompt will tell Claude to skip this or use truthful trust elements.',
-    step: 'Step', provided: 'Provided by you', imageArea: 'Product image area'
+    step: 'Step', provided: 'Provided by you', imageArea: 'Product image area', secondary: 'See what is inside',
+    badge: { digital: 'Digital product', service: 'Service', leads: 'Join the list', brand: 'Personal brand', physical: 'Physical product', course: 'Course', other: 'Featured' }
   },
   id: {
     sec: { problem: 'Masalahnya', solution: 'Solusinya', benefits: 'Manfaat', features: 'Fitur', how: 'Cara kerja',
@@ -264,7 +665,8 @@ const L10N = {
            physical: 'Beli Sekarang', course: 'Gabung Sekarang', other: 'Pelajari Selengkapnya' },
     forAudience: 'Untuk ', yourProduct: 'Produk kamu', placeholder: 'Isi bagian ini akan ditulis dari brief kamu.',
     noPrice: 'Harga belum diisi.', noProof: 'Belum ada bukti nyata. Prompt akan meminta Claude melewati bagian ini atau memakai elemen kepercayaan yang jujur.',
-    step: 'Langkah', provided: 'Dari kamu', imageArea: 'Area gambar produk'
+    step: 'Langkah', provided: 'Dari kamu', imageArea: 'Area gambar produk', secondary: 'Lihat isinya',
+    badge: { digital: 'Produk digital', service: 'Jasa', leads: 'Gabung daftar', brand: 'Brand personal', physical: 'Produk fisik', course: 'Kelas', other: 'Pilihan' }
   }
 };
 
@@ -389,7 +791,7 @@ function defaultSections(goal) {
 function defaultProject() {
   const t = nowISO();
   return {
-    id: uid(), name: '', createdAt: t, updatedAt: t, step: 1, maxStep: 1,
+    id: uid(), name: '', createdAt: t, updatedAt: t, step: 1, maxStep: 1, aiMode: 'none',
     brief: {
       productName: '', category: '', description: '', audience: '', problem: '', benefit: '',
       goal: '', goalOther: '', platform: state.settings.platform, language: state.settings.language,
@@ -434,6 +836,7 @@ function normalizeProject(raw) {
   if (!Array.isArray(p.design.recommend.results)) p.design.recommend.results = [];
   p.design.recommend.results = p.design.recommend.results.filter(function (id) { return STYLE_BY_ID[id]; });
   if (p.design.styleId && !STYLE_BY_ID[p.design.styleId]) p.design.styleId = '';
+  if (p.aiMode !== 'none' && p.aiMode !== 'gemini') p.aiMode = 'none';
   p.step = Math.min(6, Math.max(1, Number(p.step) || 1));
   p.maxStep = Math.min(6, Math.max(p.step, Number(p.maxStep) || 1));
   return p;
@@ -643,10 +1046,11 @@ const SECTION_RENDER = {
     const p = ctx.p, L = ctx.L, hl = getHeadline(p);
     return el('section', { class: 'pv-sec pv-hero' },
       el('div', { class: 'pv-hero-text' },
+        el('span', { class: 'pv-badge' }, L.badge[p.brief.goal] || L.badge.other),
         el('p', { class: 'pv-eyebrow' }, p.brief.productName.trim() || L.yourProduct),
         el('h1', { class: 'pv-h1' }, hl.text),
         hl.sub ? el('p', { class: 'pv-lead' }, hl.sub) : null,
-        el('div', { class: 'pv-cta-row' }, ctaButton(p, L))),
+        el('div', { class: 'pv-cta-row' }, ctaButton(p, L), ctx.many ? el('span', { class: 'pv-link' }, L.secondary) : null)),
       heroVisual(p, L));
   },
   problem: function (ctx) {
@@ -696,7 +1100,7 @@ const SECTION_RENDER = {
     if (c.promoPrice.trim() && c.regularPrice.trim()) price.append(el('s', { class: 'pv-price-old' }, c.regularPrice.trim()), el('span', { class: 'pv-price-now' }, c.promoPrice.trim()));
     else if (c.promoPrice.trim() || c.regularPrice.trim()) price.append(el('span', { class: 'pv-price-now' }, (c.promoPrice || c.regularPrice).trim()));
     else price.append(skel(['34%']), el('p', { class: 'pv-note' }, ctx.L.noPrice));
-    return secShell('offer', ctx, ctx.L.sec.offer, el('div', { class: 'pv-offer' }, price, el('div', { class: 'pv-cta-row' }, ctaButton(ctx.p, ctx.L))));
+    return secShell('offer', ctx, ctx.L.sec.offer, el('div', { class: 'pv-offer pv-offer-box' }, price, el('div', { class: 'pv-cta-row' }, ctaButton(ctx.p, ctx.L))));
   },
   bonus: function (ctx) {
     const items = [0, 1].map(function () { return el('li', null, el('span', { class: 'pv-tick' }), el('span', { class: 'pv-item-body' }, skel(['65%']))); });
@@ -741,7 +1145,7 @@ function renderLanding(p, opts) {
   ids.forEach(function (id) {
     if (!SECTION_RENDER[id]) return;
     if (id !== 'hero' && id !== 'final') num++;
-    pv.append(SECTION_RENDER[id]({ p: p, L: L, style: style, num: num || 1 }));
+    pv.append(SECTION_RENDER[id]({ p: p, L: L, style: style, num: num || 1, many: ids.length > 2 }));
   });
   if (!ids.length) pv.append(el('section', { class: 'pv-sec' }, el('p', { class: 'pv-note' }, 'No sections are switched on. Go to the Page Planner to enable some.')));
   wrap.append(pv);
@@ -788,9 +1192,21 @@ const GOAL_FOCUS = {
   other:    'Move visitors toward the main action described in the brief.'
 };
 
+const SECTION_DNA_FIELD = {
+  hero: 'hero', problem: 'text', solution: 'text', benefits: 'list', features: 'list', how: 'list', included: 'list',
+  proof: 'proof', offer: 'pricing', bonus: 'list', faq: 'faq', final: 'final'
+};
+
+const GENERIC_PHRASES = '"Unlock your potential", "Transform your life", "Level up your business", "Solusi terbaik untuk Anda", "Take it to the next level", "Rahasia sukses", "Dapatkan hasil maksimal"';
+
+function formulaName(id) { const f = FORMULAS.filter(function (x) { return x.id === id; })[0]; return f ? f.name : id; }
+
+/* Pure function: project in, prompt text out. Twelve sections, fixed order. */
 function buildPrompt(p) {
   const b = p.brief, c = p.content, d = p.design;
   const style = getStyle(resolveStyleId(p));
+  const dna = getDNA(style);
+  const plan = resolveFormulaPlan(p);
   const lynk = b.platform === 'lynk';
   const maxW = b.lynkPageType === 'home' ? '800px' : '500px';
   const pageType = b.lynkPageType === 'home' ? 'Lynk.id home page' : 'Lynk.id digital product page';
@@ -802,162 +1218,249 @@ function buildPrompt(p) {
   const out = [];
   const H = function (t) { out.push('', '## ' + t, ''); };
   const line = function (label, value, miss) { out.push('- ' + label + ': ' + (String(value || '').trim() ? String(value).trim() : (miss || NA))); };
+  const hasPrice = !!(c.regularPrice.trim() || c.promoPrice.trim());
 
   out.push('# Landing page build brief: ' + (p.name.trim() || b.productName.trim() || 'Untitled project'));
+  out.push('');
+  out.push('You are a senior conversion copywriter, art director and front-end developer. Build ONE complete landing page from the brief below. Work only from facts in this brief; where a fact is missing, follow the "do not invent" rules.');
+  out.push('');
+  out.push('**Priority order when two instructions collide (highest first):**');
+  out.push('1. Platform technical limits and working functionality (section 8).');
+  out.push('2. The chosen Style DNA (sections 5 and 7).');
+  out.push('3. Content hierarchy and the conversion objective (sections 2, 3, 4 and 6).');
+  out.push('4. Responsiveness and accessibility (section 10).');
+  out.push('5. Extra visual preferences from the user (brand colours, brand notes).');
+  out.push('When something cannot be done exactly as written, keep the higher-priority rule and translate the lower one into a technique that still works. Never mention such conflicts on the page.');
+  out.push('');
+  out.push('Do not fall back to a default modern landing page. Unless the Style DNA explicitly asks for them, do NOT produce: a centered hero, rounded white cards, soft shadows, gradient backgrounds, pill buttons, three-column feature grids, decorative icons, or the same layout repeated in every section.');
 
   /* 1 */
-  H('1. Role and project context');
-  out.push('You are a senior conversion-focused product designer, direct-response copywriter and front-end developer. Build ONE complete landing page for the project below.');
-  out.push('');
+  H('1. Product brief and audience context');
   out.push('- Project: ' + (p.name.trim() || b.productName.trim()));
   out.push('- Platform: ' + (lynk ? 'Lynk.id (' + pageType + ')' : 'Standard website'));
   out.push('- Language of all visible page copy: ' + lang);
-  out.push('- Work only from the facts in this brief. Where a fact is missing, follow the "do not invent" rules in section 7.');
-
-  /* 2 */
-  H('2. Product and audience brief');
   line('Product or business name', b.productName);
   line('Category', labelOf(CATEGORIES, b.category), 'Not specified.');
-  line('Description', b.description);
+  line('What it is', b.description);
   line('Target audience', b.audience);
-  line('Main customer problem', b.problem, 'Not provided. Infer only a mild, general problem from the description, and do not add statistics or dramatic claims.');
+  line('Main customer problem', b.problem, 'Not provided. Infer only a mild, general problem from the description. Add no statistics or dramatic claims.');
   line('Main benefit or desired outcome', b.benefit, 'Not provided. Derive benefits only from the description above.');
+  out.push('');
+  out.push('Before writing, work out these seven points privately and do not print them: (1) who exactly the reader is, (2) their main need or problem, (3) what the product is and includes, (4) the one or two benefits that matter most to them, (5) why this product deserves consideration, (6) what doubt would stop them buying, (7) what action you want after reading. Use only the facts above or reasonable inferences from them.');
 
-  /* 3 */
-  H('3. Landing page objective');
+  /* 2 */
+  H('2. Conversion objective');
   out.push('- Goal: ' + goalLabel(p));
   out.push('- What the page must do: ' + (GOAL_FOCUS[b.goal] || GOAL_FOCUS.other));
-  line('Primary call to action label', c.ctaLabel, 'Not provided. Propose one short, natural CTA label in the page language and use it consistently.');
+  line('Primary call to action label', c.ctaLabel, 'Not provided. Propose one short, specific CTA label in the page language and use it consistently.');
   line('CTA destination URL', c.ctaUrl, 'Not provided. Use a clearly marked placeholder href such as "#cta-link-here" and tell me where to replace it.');
+  out.push('- CTA strategy for this goal: ' + (GOAL_CTA[b.goal] || GOAL_CTA.other));
+  if (hasPrice) {
+    out.push('- Pricing to show: ' + [c.regularPrice.trim() ? 'regular price ' + c.regularPrice.trim() : '', c.promoPrice.trim() ? 'promotional price ' + c.promoPrice.trim() : ''].filter(Boolean).join('; ') +
+      '. Use these exact figures. ' + (c.regularPrice.trim() && c.promoPrice.trim() ? 'Show the regular price crossed out beside the promotional price. Do not state a percentage unless it is simple arithmetic from these two figures.' : 'Do not add a crossed-out price or a discount.'));
+  } else {
+    out.push('- Pricing: no price was supplied. Do not show or invent any price or discount. If an offer section exists, describe the offer without numbers and point to the CTA.');
+  }
+  if (c.socialProof.trim()) out.push('- Real social proof, to use exactly as written (light formatting only):\n' + c.socialProof.trim().split(/\r?\n/).map(function (x) { return '  > ' + x; }).join('\n'));
+  else out.push('- Social proof: none supplied. Write no testimonials, reviews, customer counts or ratings. Omit the proof section or replace it with truthful trust elements such as the exact contents or the process.');
+
+  /* 3 */
+  H('3. Formula execution plan');
+  const spec = plan.spec;
+  out.push('Main framework: **' + formulaName(plan.primary) + '**' + (plan.auto ? ' (applied automatically)' : '') + '. ' + spec.purpose);
+  if (plan.note) out.push(plan.note);
+  out.push('');
+  out.push('The formula must be observable: a reader should be able to find every stage in the finished copy. Do not print the formula name or the stage labels on the page. Stage by stage, with the section that carries it:');
+  out.push('');
+  plan.stages.forEach(function (st, i) {
+    out.push((i + 1) + '. **' + st.key + '** (lives in the ' + st.sections.map(sectionNameOf).join(' + ') + (st.sections.length > 1 ? ' sections' : ' section') + '): ' + st.job);
+  });
+  out.push('');
+  const shared = [];
+  plan.stages.forEach(function (st) { if (st.sections.length === 1) { const n = plan.stages.filter(function (o) { return o.sections.length === 1 && o.sections[0] === st.sections[0]; }).length; if (n > 1 && shared.indexOf(st.sections[0]) === -1) shared.push(st.sections[0]); } });
+  if (shared.length) out.push('Where several stages share one section (' + shared.map(sectionNameOf).join(', ') + '), give each stage its own paragraph or block in the order listed above.');
+  out.push('Where a stage is carried by several sections, spread its argument across them without repeating it. Sections that are switched off are not recreated; their job is already assigned to the nearest enabled section above.');
+  out.push('');
+  out.push('- Headline strategy: ' + spec.headline);
+  out.push('- Body copy strategy: ' + spec.body);
+  out.push('- Transitions: ' + spec.transitions);
+  out.push('- CTA strategy for this formula: ' + spec.cta);
+  plan.secondary.forEach(function (s) {
+    if (s.applied) out.push('- Supporting formula **' + formulaName(s.id) + '**: ' + s.text + ' Apply it only in ' + s.targets.map(sectionNameOf).join(', ') + ', and keep the main framework as the page backbone.');
+    else out.push('- Supporting formula ' + formulaName(s.id) + ' was chosen but the sections it needs are switched off, so skip it. Do not add sections to make room for it.');
+  });
+  if (plan.lens4u) {
+    const urg = hasUrgencySource(p);
+    out.push('- **4U headline lens** (applies to the hero headline, subheadline, every section heading and the closing headline): each must be Useful, Unique and Ultra-specific. ' +
+      (urg ? 'The brief mentions a time or quantity limit in the notes, so Urgent may be used, but only with exactly that fact.' : 'No real deadline or limit is in the brief, so skip urgency entirely.'));
+    out.push('  ' + FORMULA_SPECS['4u'].headline);
+  }
+  if (plan.stages.some(function (s) { return s.key === 'Story'; })) {
+    out.push('- Story rule: ' + (hasStoryFacts(p) ? 'Use only story facts that appear in the brand notes, social proof or additional notes below.' : 'No story facts were supplied. Write a brief, honest "why this exists" from the description only. Do not invent a personal story, origin, case study or testimonial.'));
+  }
+  out.push('- Never let the formula force a claim the brief does not support. If a stage cannot be written honestly from the facts, write a shorter, plainer version rather than inventing something.');
 
   /* 4 */
-  H('4. Selected visual direction');
-  out.push('- Direction: ' + style.name + ' (' + style.description + ')');
-  if (d.mode === 'style') {
-    out.push('- How it was chosen: selected by me from a preset gallery.');
-  } else if (d.mode === 'recommend') {
-    const a = d.recommend;
-    out.push('- How it was chosen: I answered a short questionnaire and picked this from a rule-based shortlist.');
-    out.push('- My answers: personality = ' + (labelOf(PERSONALITY, a.personality) || 'n/a') + '; impression = ' + (labelOf(EMOTION, a.emotion) || 'n/a') +
-      '; price positioning = ' + (labelOf(PRICE, a.price) || 'n/a') + '; audience type = ' + (labelOf(AUDIENCE, a.audience) || 'n/a') + '.');
-  } else {
-    out.push('- How it was chosen: I supplied a visual reference. Use "' + style.name + '" only as the closest starting point.');
-    line('Reference URL', d.referenceUrl, 'None.');
-    line('What I like about the reference', d.referenceNotes, 'Not described.');
-    out.push('- Reference screenshot: ' + (d.referenceImageName ? 'I will attach it to this chat (' + d.referenceImageName + '). Study it for palette, type contrast, spacing, image treatment and composition.' : 'None attached.'));
-    out.push('- Use the reference as visual guidance only. Do not copy its brand name, logo, text, photographs, illustrations or code, and do not reproduce the page one-to-one. Capture the design language, not the assets.');
-  }
+  H('4. Copywriting quality rules');
+  const tone = c.tone === 'casual' ? 'Casual, warm and conversational.' : c.tone === 'formal' ? 'Formal, professional and concise.' :
+    'Match the audience described above: warm and practical for parents and beginners, direct and efficient for professionals.';
+  out.push('- Language: ' + lang + '. Tone: ' + tone + (b.language === 'id' ? ' Use natural, everyday Indonesian and one consistent way of addressing the reader (for example kamu or Anda). Avoid stiff translated phrasing.' : ''));
+  out.push('- Be specific to this product and audience. Every sentence should be impossible to paste unchanged onto a different product.');
+  out.push('- Prefer concrete benefits and details over abstract claims. Say what the reader can do, get or stop doing.');
+  out.push('- State the value proposition in one plain sentence early, and show what differs from alternatives only when the brief gives you facts for it.');
+  out.push('- Headline, subheadline, CTA and offer must support one another and tell the same story.');
+  out.push('- Each section must add a new argument or fact. Do not repeat the same message in new words in another section.');
+  out.push('- Clarity beats hype. Avoid generic phrases that fit any product, for example ' + GENERIC_PHRASES + '. They are not banned if a specific context truly justifies them, but never use them as defaults.');
+  out.push('- Handle the doubts a reader of this product would likely have (who it is for, what exactly they get, how access or delivery works, how to pay, what to do if unsure) using only facts from this brief. Where a fact is missing write a clearly marked placeholder such as [to be confirmed]; never guess.');
+  if (c.headline.trim()) out.push('- Headline idea from me: "' + c.headline.trim() + '". Keep its meaning and intent, but you may sharpen clarity and pull.');
+  else out.push('- Hero headline: write several candidate headlines privately, score them for relevance, clarity, differentiation and pull, and keep the best one. It must state what this is and who it is for. Do not show the alternatives on the page.');
+  out.push('- Never invent: testimonials, customer counts, ratings, prices, discounts, guarantees, certifications, results, scarcity, deadlines, bonuses or any business fact not stated here.');
+  out.push('- Urgency or scarcity appears only when a real deadline or limit is stated in this brief.');
+  line('Brand notes', c.brandNotes, 'None.');
+  line('Additional notes from me', c.notes, 'None.');
 
   /* 5 */
-  H('5. Visual system requirements');
-  out.push('Let this style drive the composition, typography, shapes and spacing. Do not start from a generic template and recolor it.');
-  out.push('');
-  out.push('- Suggested palette: background ' + style.palette.bg + ', surface ' + style.palette.surface + ', text ' + style.palette.ink + ', muted text ' + style.palette.muted +
-    ', lines ' + style.palette.line + ', main accent ' + style.palette.accent + ', secondary accent ' + style.palette.accent2 + '.');
-  if (hexes.length) out.push('- Brand colors I supplied: ' + hexes.join(', ') + '. These take priority for accent roles. Keep body text contrast at WCAG AA (4.5:1) or better.');
-  else if (c.colors.trim()) out.push('- Brand colors I described: ' + c.colors.trim() + '. Translate them into suitable hex values and keep text contrast at WCAG AA or better.');
-  else out.push('- Brand colors: none supplied. Use the suggested palette.');
-  out.push('- Typography: ' + style.typography);
-  out.push('- Font stack: ' + style.fonts.display + ' for headings; ' + style.fonts.body + ' for body. Use these system font stacks only, with no web-font downloads.');
-  out.push('- Layout: ' + style.layout);
-  out.push('- Components and borders: ' + style.components);
-  out.push('- Image treatment: ' + style.image);
-  out.push('- CTA treatment: ' + style.cta);
-  out.push('- Avoid: ' + style.avoid);
-  out.push('- General: do not wrap every section in the same rounded card, do not add glow, glass or gradient effects the style does not call for, and use whitespace, rules and type to create hierarchy.');
-  line('Brand notes', c.brandNotes, 'None.');
+  H('5. Style DNA: ' + style.name);
+  if (d.mode === 'style') out.push('- Chosen by me from a preset gallery.');
+  else if (d.mode === 'recommend') {
+    const a = d.recommend;
+    out.push('- Chosen from a short questionnaire (personality = ' + (labelOf(PERSONALITY, a.personality) || 'n/a') + '; impression = ' + (labelOf(EMOTION, a.emotion) || 'n/a') +
+      '; price positioning = ' + (labelOf(PRICE, a.price) || 'n/a') + '; audience type = ' + (labelOf(AUDIENCE, a.audience) || 'n/a') + ').');
+  } else {
+    out.push('- I supplied a visual reference. Use "' + style.name + '" as the closest starting point and adapt it to what I like in the reference.');
+    line('Reference URL', d.referenceUrl, 'None.');
+    line('What I like about the reference', d.referenceNotes, 'Not described.');
+    out.push('- Reference screenshot: ' + (d.referenceImageName ? 'I will attach it to this chat (' + d.referenceImageName + '). Study palette, type contrast, spacing, image treatment and composition.' : 'None attached.'));
+    out.push('- Use the reference as guidance only. Do not copy its brand name, logo, text, photographs, illustrations or code. Capture the design language, not the assets.');
+  }
+  out.push('- Visual signature (the first thing a reviewer must see): ' + dna.sig);
+  out.push('- Palette: background ' + style.palette.bg + ', surface ' + style.palette.surface + ', text ' + style.palette.ink + ', muted text ' + style.palette.muted + ', lines ' + style.palette.line + ', main accent ' + style.palette.accent + ', secondary accent ' + style.palette.accent2 + '.');
+  out.push('- Colour roles: ' + dna.roles);
+  if (hexes.length) out.push('- Brand colours I supplied: ' + hexes.join(', ') + '. They replace the accent colours above but not the roles or structure. Keep body text contrast at WCAG AA (4.5:1) or better.');
+  else if (c.colors.trim()) out.push('- Brand colours I described: ' + c.colors.trim() + '. Turn them into suitable hex values for the accent roles and keep text contrast at WCAG AA or better.');
+  else out.push('- Brand colours: none supplied. Use the palette above.');
+  out.push('- Fonts: ' + style.fonts.display + ' for headings; ' + style.fonts.body + ' for body. System font stacks only, no web-font downloads.');
+  out.push('- Typography: ' + dna.type);
+  out.push('- Headline treatment: ' + dna.headline);
+  out.push('- Surfaces, borders and shadows: ' + dna.surface);
+  out.push('- Image treatment: ' + dna.image);
+  out.push('- Spacing and whitespace: ' + dna.space);
+  out.push('- Forbidden for this style: ' + dna.forbidden.join(', ') + '.');
 
   /* 6 */
-  H('6. Landing page structure and order');
-  out.push('Build exactly these sections, in this order:');
+  H('6. Section plan and order');
+  out.push('Build exactly these sections, in this order. Each has one job that no other section repeats:');
   out.push('');
-  enabled.forEach(function (s, i) { out.push((i + 1) + '. ' + s.name + ': ' + s.hint); });
+  enabled.forEach(function (s, i) {
+    const tags = [];
+    plan.stages.forEach(function (st) { if (st.sections.indexOf(s.id) !== -1) tags.push(formulaName(plan.primary) + ' ' + st.key); });
+    plan.secondary.forEach(function (sc) { if (sc.applied && sc.targets.indexOf(s.id) !== -1) tags.push(formulaName(sc.id) + ' support'); });
+    out.push((i + 1) + '. **' + s.name + '**: ' + (SECTION_JOB[s.id] || s.hint) + (tags.length ? ' Formula role: ' + tags.join('; ') + '.' : ''));
+  });
   if (disabled.length) { out.push(''); out.push('Do not add these sections: ' + disabled.join(', ') + '.'); }
   out.push('Keep a clear path from hook to value, proof, offer and action.');
 
   /* 7 */
-  H('7. Copywriting requirements');
-  const tone = c.tone === 'casual' ? 'Casual, warm and conversational.' : c.tone === 'formal' ? 'Formal, professional and concise.' :
-    'Match the audience described above. Warm and practical for parents and beginners; direct and efficient for professionals.';
-  out.push('- Language: ' + lang + '. Tone: ' + tone);
-  if (c.headline.trim()) out.push('- Headline idea from me: "' + c.headline.trim() + '". You may sharpen it, but keep its meaning.');
-  else out.push('- Hero headline: write a specific, benefit-led headline that says what this is and who it is for, based only on the description and benefit above. Avoid vague lines such as "Unlock your potential".');
-  const chosen = (c.formulas || []).map(function (id) { return FORMULAS.filter(function (f) { return f.id === id; })[0]; }).filter(Boolean);
-  if (chosen.length) {
-    out.push('- Copywriting formulas I chose (' + chosen.map(function (f) { return f.name; }).join(', ') + '). Blend them across the sections that exist, apply each where it fits, and do not print the formula names or step labels on the page:');
-    chosen.forEach(function (f) { out.push('  - ' + f.use); });
-  } else {
-    out.push('- Frameworks: use AIDA for the overall flow from hero to offer. Use PAS inside the problem and solution sections if both are present. Use benefit-led wording for features. Apply each only where it fits; do not force all of them everywhere.');
-  }
-  out.push('- CTA hierarchy: one clear primary CTA style repeated at key points, quieter secondary actions, and text links last. Do not make every button look the same.');
-  out.push('- Objection handling: answer likely doubts (who it is for, what is included, how access works, how to pay) using only facts from this brief. Where a fact is missing, write a clearly marked placeholder such as [to be confirmed] instead of guessing.');
-  if (c.regularPrice.trim() || c.promoPrice.trim()) {
-    out.push('- Pricing to show: ' + [c.regularPrice.trim() ? 'regular price ' + c.regularPrice.trim() : '', c.promoPrice.trim() ? 'promotional price ' + c.promoPrice.trim() : ''].filter(Boolean).join('; ') +
-      '. Use these exact figures. ' + (c.regularPrice.trim() && c.promoPrice.trim() ? 'Show the regular price crossed out beside the promotional price.' : 'Do not add a crossed-out price.'));
-  } else {
-    out.push('- Pricing: no price was provided. Do not show or invent any price or discount. If an offer section exists, describe the offer without numbers and point to the CTA.');
-  }
-  if (c.socialProof.trim()) out.push('- Real social proof to use exactly as written (only light formatting allowed):\n' + c.socialProof.trim().split(/\r?\n/).map(function (x) { return '  > ' + x; }).join('\n'));
-  else out.push('- Social proof: none supplied. Do not write testimonials, reviews, customer counts or ratings. Omit the section or use truthful alternatives such as the product contents or the process.');
-  out.push('- Never invent: testimonials, customer counts, prices, discounts, guarantees, certifications, results, scarcity or urgency claims, deadlines, or any business fact not stated here.');
-  line('Additional notes from me', c.notes, 'None.');
+  H('7. Component design');
+  out.push('Design each component to the Style DNA. Components differ by style; do not reuse one generic component set.');
+  out.push('');
+  out.push('- Primary button: ' + dna.button);
+  out.push('- Secondary action: ' + dna.secondary + ' It must always have clearly less emphasis than the primary button. Use one primary CTA style and the same label throughout.');
+  out.push('- Card or content container: ' + dna.card);
+  out.push('- Pricing: ' + dna.pricing + (hasPrice ? '' : ' (No price was supplied, so show no price element.)'));
+  out.push('- Badges and labels: ' + dna.badge + ' Use badges only for facts from the brief.');
+  out.push('- Interaction states: ' + (lynk ? dna.states.lynk : dna.states.web));
+  out.push('');
+  out.push('Section composition (rhythm: ' + dna.rhythm + ')');
+  out.push('');
+  enabled.forEach(function (s) {
+    const f = SECTION_DNA_FIELD[s.id] || 'text';
+    out.push('- ' + s.name + ': ' + dna[f]);
+  });
+  out.push('');
+  out.push('Vary composition from section to section in the way this style does. Do not turn every section into a card.');
 
   /* 8 */
-  H('8. Platform-specific technical constraints');
+  H('8. Platform constraints');
   if (lynk) {
     out.push('Target: ' + pageType + ' on Lynk.id.');
     out.push('');
     out.push('- Deliver complete HTML as ONE self-contained fragment starting with a single root <div>. No <html>, <head>, <body>, <script>, <style> or <link> tags.');
-    out.push('- 100% inline CSS: every style goes in a style="" attribute. No <style> tag, no CSS classes that depend on a stylesheet.');
-    out.push('- No external JavaScript, no frameworks, no web-font or CSS imports, no unnecessary external dependencies.');
+    out.push('- 100% inline CSS: every style goes in a style="" attribute. No <style> tag and no classes that depend on a stylesheet.');
+    out.push('- Write literal values (for example hex colours) directly in each style attribute. No CSS custom properties.');
+    out.push('- No external JavaScript, frameworks, web-font or CSS imports, or other external dependencies.');
     out.push('- Mobile-first. Root container: max-width ' + maxW + '; width: 100%; margin: 0 auto; box-sizing: border-box.');
-    out.push('- No @keyframes, no marquee or scrolling-text animation, no CSS variables, no pseudo-elements, no hover or media-query rules. If an animation cannot be done safely inline, leave it out.');
-    out.push('- Use simple, widely supported HTML and CSS that survives being embedded in another page. Do not use position: fixed or overflow tricks that could break the host layout.');
-    out.push('- For FAQ use <details><summary>Question</summary><div>Answer</div></details> with all styling inline.');
-    out.push('- Use only features that work in common mobile browsers. Keep the markup clean and commented only where it helps me edit it.');
+    out.push('- No @keyframes, no marquee or scrolling-text animation, no pseudo-elements, no hover or media-query rules. If an animation cannot be done safely inline, leave it out.');
+    out.push('- Do not use position: fixed or overflow tricks that could break the host page. Absolute positioning is fine only inside a wrapper with position: relative.');
+    out.push('- For the FAQ use <details><summary>Question</summary><div>Answer</div></details> with all styling inline.');
+    out.push('- Use only features that work in common mobile browsers. Keep the markup clean.');
+    out.push('');
+    out.push('Keeping the style inside these limits: the Style DNA still applies in full. Translate it as follows.');
+    out.push('- Decorative shapes, stickers, numerals and markers are inline-block elements or spans, not pseudo-elements.');
+    out.push('- Layout that would normally use media queries uses flex-wrap with flex: 1 1 <width>px children, max-width and clamp() so columns stack on phones.');
+    out.push('- Hover and press effects are dropped; show static versions instead (for example a shadow that is already offset).');
+    out.push('- Style-specific notes: ' + dna.lynk);
   } else {
     out.push('Target: a standard website I will host or open locally.');
     out.push('');
     out.push('- Deliver complete HTML and CSS' + (b.outputFormat === 'single' ? ' in ONE single HTML file with the CSS inside a <style> tag.' : ' as two files: index.html and styles.css, linked with <link rel="stylesheet" href="styles.css">.'));
     out.push('- Semantic HTML: header, main, section with headings in logical order, footer. One h1 only.');
     out.push('- Responsive, mobile-first layout with min-width media queries. No horizontal scrolling at any width.');
-    out.push('- Minimal dependencies: no frameworks, no CSS libraries, no build step. No JavaScript unless strictly needed (use <details> for the FAQ).');
-    out.push('- Use CSS custom properties for colors and spacing so I can edit them easily. Include visible focus styles and respect prefers-reduced-motion.');
+    out.push('- No frameworks, CSS libraries or build step. No JavaScript unless strictly needed (use <details> for the FAQ).');
+    out.push('- Define the palette and spacing as CSS custom properties on :root so I can edit them. Pseudo-elements, hover states and transitions are allowed where the Style DNA calls for them.');
+    out.push('- Include visible focus styles and respect prefers-reduced-motion.');
     out.push('- ' + (b.outputFormat === 'single' ? 'A single file is preferred so I can save and open it immediately.' : 'Keep the file structure to exactly those two files.'));
+    out.push('- Style-specific notes: translate the Style DNA with normal CSS. Hover and focus states: ' + dna.states.web);
   }
 
   /* 9 */
   H('9. Asset and image requirements');
-  if (c.productImageUrl.trim()) out.push('- Product image: use this URL in the hero or main visual with descriptive alt text: ' + c.productImageUrl.trim());
-  else out.push('- Product image: none supplied. Use a typography-led composition or simple CSS/inline shapes. Do not insert unrelated stock photos or hotlink random images.');
+  if (c.productImageUrl.trim()) out.push('- Product image: use this URL in the hero or main visual with descriptive alt text: ' + c.productImageUrl.trim() + ' Treat it as the style prescribes (' + dna.image + ')');
+  else out.push('- Product image: none supplied. Use a typography-led composition or simple inline shapes in the style. Do not insert unrelated stock photos or hotlink random images.');
   out.push('- Every image needs meaningful alt text, width: 100%, max-width: 100% and height: auto so it never overflows.');
   out.push('- Do not use logos, photos or illustrations that I have not provided.');
-  if (d.mode === 'reference' && d.referenceImageName) out.push('- The reference screenshot is for visual guidance only; do not embed it in the page.');
+  if (d.mode === 'reference' && d.referenceImageName) out.push('- The reference screenshot is guidance only. Do not embed it in the page.');
 
   /* 10 */
-  H('10. Responsive behavior');
+  H('10. Responsive requirements');
   if (lynk) {
-    out.push('- Design for 320px, 375px and 430px phone widths first, and check that it also looks right inside the ' + maxW + ' container on desktop.');
-    out.push('- Use flexible widths (width: 100%, max-width) and padding in relative-friendly values. No fixed widths wider than the screen.');
+    out.push('- Design for 320px, 375px and 430px phone widths first, and check that it also sits well inside the ' + maxW + ' container on desktop.');
+    out.push('- Use flexible widths (width: 100%, max-width) and flex-wrap. No fixed widths wider than the screen.');
   } else {
     out.push('- Start with a single-column mobile layout, then enhance at about 640px and 960px. Keep a comfortable reading width (about 65 characters) for body text.');
-    out.push('- Test mentally at 320px, 375px, 768px and 1280px.');
+    out.push('- Think through 320px, 375px, 768px and 1280px.');
   }
-  out.push('- Buttons must be at least 44px tall and easy to tap. Headlines must scale down so they never overflow or collide.');
+  out.push('- The style must still be recognisable on a phone: keep its hero composition, button shape, borders and typography, only stacked.');
+  out.push('- Buttons are at least 44px tall and easy to tap. Headlines scale down so they never overflow or collide. Keep text contrast at 4.5:1 or better.');
 
   /* 11 */
-  H('11. Quality checklist');
-  out.push('Before you answer, silently check every item and fix any failure:');
+  H('11. Quality assurance');
+  out.push('Before you answer, check every item silently and fix any failure. Do not claim you tested the page in a browser; you may say it was reviewed by reading the code.');
   out.push('');
-  out.push('- [ ] The style is visibly recognizable and consistent in type, shape, color and imagery.');
-  out.push('- [ ] The page does not rely on identical rounded cards repeated in every section.');
-  out.push('- [ ] The hero says what it is, who it is for and what to do next within a few seconds.');
+  out.push('**Copywriting QA**');
+  out.push('- [ ] Every stage of ' + formulaName(plan.primary) + ' (' + plan.stages.map(function (s) { return s.key; }).join(', ') + ') can be found in the copy, in order, in the sections named in section 3.');
+  spec.validate.forEach(function (v) { out.push('- [ ] ' + v); });
+  out.push('- [ ] The headline is specific to this product and audience, not a generic line.');
+  out.push('- [ ] Each section adds a new argument; nothing is repeated in new words.');
+  out.push('- [ ] Every feature is linked to a benefit for this audience.');
+  out.push('- [ ] The offer is clear' + (hasPrice ? ' and uses the exact supplied prices' : ' and shows no invented price') + '.');
+  out.push('- [ ] The CTA matches the goal and the label is the same everywhere.');
+  out.push('- [ ] No claim, number, testimonial, guarantee or urgency appears that the brief does not support.');
+  out.push('');
+  out.push('**Design QA**');
+  out.push('- [ ] The visual signature is obvious at a glance: ' + dna.sig);
+  out.push('- [ ] The buttons, cards or containers, typography hierarchy and pricing follow section 7 and not a generic template.');
+  out.push('- [ ] Section compositions vary the way the style prescribes; not every section is a card.');
+  out.push('- [ ] None of these forbidden patterns appear: ' + dna.forbidden.join(', ') + '.');
+  out.push('- [ ] None of the default patterns listed at the top (centered hero, rounded white cards, soft shadows, gradients, pill buttons, three-column grids, decorative icons) appear unless this Style DNA asks for them.');
+  out.push('- [ ] The style stays consistent from the hero to the final CTA.');
+  out.push('');
+  out.push('**Technical QA**');
   out.push('- [ ] Only the sections listed in section 6 appear, in that order.');
-  out.push('- [ ] No invented testimonials, numbers, prices, guarantees, certifications or urgency.');
-  out.push('- [ ] Text contrast is at least 4.5:1 and the CTA stands out.');
-  out.push('- [ ] No horizontal overflow at 320px.');
-  out.push(lynk ? '- [ ] 100% inline CSS, no <style>, no <script>, no keyframes, width limit ' + maxW + ' is applied.' :
-    '- [ ] HTML is semantic, files match the requested structure, and there is no unnecessary JavaScript.');
+  out.push(lynk ? '- [ ] One root <div>, 100% inline CSS, no <style>, <script> or <link>, no keyframes, no pseudo-elements, no CSS variables, width limit ' + maxW + ' applied.' :
+    '- [ ] The HTML is valid and semantic, the file structure matches section 12, and there is no unnecessary JavaScript.');
+  out.push('- [ ] No horizontal overflow at 320px and the CTAs are tappable.');
+  out.push('- [ ] The FAQ and any requested interaction work without JavaScript.');
 
   /* 12 */
   H('12. Required output format');
@@ -965,33 +1468,17 @@ function buildPrompt(p) {
   if (lynk) out.push('2. The complete HTML in a single code block (language: html). Nothing outside the code block is part of the page.');
   else if (b.outputFormat === 'single') out.push('2. The complete single-file HTML in one code block (language: html).');
   else out.push('2. Two code blocks, each labeled with its filename: index.html and styles.css.');
-  out.push('3. A short list of any placeholders I must replace, such as links, prices or facts marked [to be confirmed].');
-  out.push('4. The installation steps from section 13.');
-  out.push('Do not add long explanations before or after the code.');
-
-  /* 13 */
-  H('13. Installation or usage instructions');
-  out.push('After the code, give these steps in short form:');
-  out.push('');
+  out.push('3. A short list of placeholders I must replace, such as links, prices or facts marked [to be confirmed].');
+  out.push('4. These installation steps, in short form:');
   if (lynk) {
-    if (b.lynkPageType === 'home') {
-      out.push('1. Log in to Lynk.id and open your home page editor.');
-      out.push('2. Add a "Text" block and click the </> (HTML) button.');
-      out.push('3. Paste the whole HTML, save, and preview it on a phone.');
-    } else {
-      out.push('1. In Lynk.id, open "Add Digital Product" (or edit an existing product).');
-      out.push('2. Go to the description area and click the </> (HTML) button.');
-      out.push('3. Paste the whole HTML, save, and preview it on a phone.');
-    }
+    if (b.lynkPageType === 'home') out.push('   Log in to Lynk.id and open your home page editor. Add a "Text" block and click the </> (HTML) button. Paste the whole HTML, save, and preview on a phone.');
+    else out.push('   In Lynk.id open "Add Digital Product" (or edit an existing one). In the description area click the </> (HTML) button. Paste the whole HTML, save, and preview on a phone.');
   } else if (b.outputFormat === 'single') {
-    out.push('1. Copy the code into a text editor and save it as index.html.');
-    out.push('2. Double-click the file to open it in your browser.');
-    out.push('3. To publish, upload the file to any static hosting service.');
+    out.push('   Save the code as index.html and double-click it to open in a browser. To publish, upload the file to any static host.');
   } else {
-    out.push('1. Create a new folder and save the two files in it with the exact names index.html and styles.css.');
-    out.push('2. Double-click index.html to open it in your browser.');
-    out.push('3. To publish, upload the whole folder to any static hosting service.');
+    out.push('   Save the two files in one folder as index.html and styles.css, then double-click index.html. To publish, upload the whole folder to any static host.');
   }
+  out.push('Do not add long explanations before or after the code.');
   out.push('');
   out.push('Start now and follow section 12 exactly.');
   return out.join('\n');
@@ -1524,6 +2011,28 @@ function fillForm() {
     const v = getPath(p, inp.dataset.bind);
     inp.value = v === undefined || v === null ? '' : v;
   });
+  syncAiMode();
+}
+
+/* ---------- AI mode (Step 1): with AI (Gemini, own key) or without AI (prompt only) ---------- */
+function syncAiMode() {
+  const p = state.current; if (!p) return;
+  $$('input[name="aiMode"]').forEach(function (r) { r.checked = r.value === p.aiMode; });
+  const blk = $('#ai-key-block'); if (blk) blk.hidden = p.aiMode !== 'gemini';
+}
+function setAiMode(mode) {
+  const p = state.current; if (!p || (mode !== 'none' && mode !== 'gemini')) return;
+  p.aiMode = mode; syncAiMode(); applyAiModeToStep6(); scheduleSave();
+}
+function applyAiModeToStep6() {
+  const p = state.current; if (!p) return;
+  const on = p.aiMode === 'gemini';
+  const gen = $('.gen'); if (gen) gen.hidden = !on;
+  const off = $('#ai-off-note'); if (off) off.hidden = on;
+  const copy = $('#btn-copy'); if (copy) copy.className = 'btn' + (on ? '' : ' btn-primary');
+  const h = $('#h-step-6-sub');
+  if (h) h.textContent = on ? 'With AI is on: generate the page with your own Gemini key below, or copy the prompt to use anywhere else.' : 'Built from your current project data. Edit anything, then copy it into Claude, ChatGPT or any other AI.';
+  if (on) { const det = $('#gkey-details'); if (det && !state.gemini.key) det.open = true; }
 }
 
 function updateConditional() {
@@ -1807,6 +2316,17 @@ function moveSection(i, dir, id) {
 }
 
 /* ---------- step 5: review + preview ---------- */
+function formulaSummary(p) {
+  const plan = resolveFormulaPlan(p);
+  let t = formulaName(plan.primary) + (plan.auto ? ' (automatic)' : ' (main)');
+  plan.secondary.forEach(function (s) { t += ', ' + formulaName(s.id) + (s.applied ? ' (support)' : ' (skipped, sections off)'); });
+  if (plan.lens4u) t += ', 4U (headlines)';
+  return t;
+}
+function formulaPlanText(p) {
+  return resolveFormulaPlan(p).stages.map(function (st) { return st.key + ' → ' + st.sections.map(sectionNameOf).join(' + '); }).join('; ');
+}
+
 function renderReview() {
   const p = state.current, b = p.brief, d = p.design, c = p.content;
   const style = getStyle(resolveStyleId(p));
@@ -1821,7 +2341,9 @@ function renderReview() {
     ['Page language', b.language === 'id' ? 'Indonesian' : 'English'],
     ['Visual style', style.name + ' (' + modeText + ')'],
     ['Sections', enabled.length ? enabled.join(' → ') : 'None'],
-    ['Copy formula', c.formulas.length ? c.formulas.map(function (id) { return FORMULAS.filter(function (f) { return f.id === id; })[0].name; }).join(', ') : 'Automatic (AIDA with PAS where it fits)'],
+    ['Copy formula', formulaSummary(p)],
+    ['Formula plan', formulaPlanText(p)],
+    ['AI mode', p.aiMode === 'gemini' ? 'With AI (Gemini, your own key)' : 'Without AI (prompt only)'],
     ['Main CTA', (c.ctaLabel.trim() || 'Label not set') + (c.ctaUrl.trim() ? ' → ' + c.ctaUrl.trim() : ' (no URL)')]
   ];
   const dl = $('#summary'); dl.textContent = '';
@@ -1889,7 +2411,7 @@ function enterPrompt() {
   if (p.design.mode === 'reference' && p.design.referenceImageName) {
     note.textContent = 'Reminder: attach your reference screenshot (' + p.design.referenceImageName + ') to the Claude chat yourself. The prompt cannot carry the image.'; note.hidden = false;
   } else note.hidden = true;
-  setGenStatus('', 'info'); syncKeyPanels(); renderGenResult();
+  setGenStatus('', 'info'); applyAiModeToStep6(); syncKeyPanels(); renderGenResult();
 }
 function regeneratePrompt() {
   const p = state.current;
@@ -1979,7 +2501,12 @@ function bindEvents() {
   $('#btn-edit-prompt').addEventListener('click', function () { const ta = $('#prompt-text'); ta.focus(); ta.setSelectionRange(0, 0); ta.scrollTop = 0; setStatus('You can edit the prompt directly in the text box. Changes are saved automatically.', 'info'); });
   $('#btn-new-from-6').addEventListener('click', newProject);
 
-  // Gemini (optional)
+  // AI mode (Step 1)
+  $$('input[name="aiMode"]').forEach(function (r) { r.addEventListener('change', function () { if (r.checked) setAiMode(r.value); }); });
+  $('#btn-ai-on').addEventListener('click', function () { setAiMode('gemini'); showStep(1); const k = $('#gb-key'); if (k) k.focus(); });
+
+  // Gemini
+  $('#gkey-mount-brief').append(buildKeyPanel('gb'));
   $('#gkey-mount-settings').append(buildKeyPanel('gs'));
   $('#gkey-mount-studio').append(buildKeyPanel('gp'));
   $('#gkey-details').addEventListener('toggle', function (e) { e.target.dataset.touched = '1'; });
