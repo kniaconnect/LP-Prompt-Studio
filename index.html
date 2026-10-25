@@ -185,6 +185,15 @@
       <div class="step" id="step-1" data-step="1" hidden>
         <h2 class="h2" id="h-step-1" tabindex="-1">1. Product brief</h2>
         <p class="muted">Tell the studio what you are promoting. Optional fields can stay empty; the generated prompt will tell Claude not to invent them.</p>
+        <fieldset class="mode-switch mode-switch-2" id="ai-mode-box">
+          <legend>How should the final page be made?</legend>
+          <label class="mode-opt"><input type="radio" name="aiMode" value="none"><span><strong>Without AI</strong><small>You get a ready prompt. Paste it into Claude, ChatGPT or any AI yourself. No key needed.</small></span></label>
+          <label class="mode-opt"><input type="radio" name="aiMode" value="gemini"><span><strong>With AI (Gemini)</strong><small>Use your own Google AI Studio key. The studio sends the prompt for you and shows the finished page.</small></span></label>
+        </fieldset>
+        <div id="ai-key-block" class="ai-key-block" hidden>
+          <p class="small muted">Your key stays in this browser and goes only to Google. Test it now so Step 6 is ready.</p>
+          <div id="gkey-mount-brief"></div>
+        </div>
         <div class="form-grid">
           <div class="field">
             <label for="f-name">Project name <span class="req">Required</span></label>
@@ -378,7 +387,7 @@
           </div>
           <fieldset class="field full formula-set">
             <legend>Copywriting formula</legend>
-            <p class="hint">Pick up to three, or leave on Automatic. Claude blends them instead of printing the labels on the page.</p>
+            <p class="hint">Pick up to three, or leave on Automatic. The first one you tick becomes the main framework of the page; the others are applied only to the sections they suit. The prompt tells the AI to follow every stage without printing the labels. 4U only sharpens headlines.</p>
             <div id="formula-list" class="formula-list"></div>
             <p class="field-error" id="e-content-formulas" hidden></p>
           </fieldset>
@@ -429,7 +438,7 @@
       <!-- STEP 6 -->
       <div class="step" id="step-6" data-step="6" hidden>
         <h2 class="h2" id="h-step-6" tabindex="-1">6. Prompt workspace</h2>
-        <p class="muted">Built from your current project data. Edit anything, then copy it into Claude.</p>
+        <p class="muted" id="h-step-6-sub">Built from your current project data. Edit anything, then copy it into Claude.</p>
         <div id="prompt-notice" class="banner banner-info" role="status" hidden></div>
         <div class="field">
           <label for="prompt-text">Generated prompt</label>
@@ -444,8 +453,10 @@
         <p id="copy-status" class="status" role="status" aria-live="polite"></p>
         <p id="attach-note" class="small muted" hidden></p>
 
+        <p class="small muted" id="ai-off-note">Without AI is selected. Want the studio to write the page for you? <button type="button" class="link-btn" id="btn-ai-on">Switch to With AI (Gemini)</button></p>
+
         <section class="gen" aria-labelledby="h-gen">
-          <h3 class="h3" id="h-gen">Generate with Gemini (optional)</h3>
+          <h3 class="h3" id="h-gen">Generate with Gemini</h3>
           <p class="muted small">Send the prompt above straight to Google's Gemini API using your own key, then preview the page it writes. The prompt is sent exactly as shown in the text box.</p>
           <details class="gkey-details" id="gkey-details">
             <summary>API key and model</summary>
