@@ -123,6 +123,8 @@ input[type="file"] { padding: 8px 0; }
 .step-footer .btn-primary { margin-left: auto; }
 
 .mode-switch { border: 0; padding: 0; margin: var(--s4) 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s3); }
+.mode-switch-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: var(--s4); }
+.ai-key-block { margin: 0 0 var(--s5); padding: var(--s4); border: 1px dashed var(--line-strong); border-radius: var(--r); }
 .mode-switch legend { grid-column: 1 / -1; padding: 0; margin-bottom: var(--s2); }
 .mode-opt { position: relative; display: block; cursor: pointer; }
 .mode-opt input { position: absolute; opacity: 0; inset: 0; }
@@ -336,6 +338,12 @@ input[type="password"]:hover { border-color: var(--ink); }
 .pv.is-thumb .pv-sec { padding: 40px 40px; }
 .pv.is-thumb .pv-hero { grid-template-columns: 1.15fr .85fr; }
 
+/* shared hooks for badge, secondary link and offer box (each style restyles them) */
+.pv-badge { display: inline-block; font-size: .72em; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 1.4cqw; }
+.pv-link { display: inline-block; align-self: center; text-decoration: underline; text-underline-offset: 4px; font-weight: 600; }
+.pv-offer-box { padding: 0; }
+.pv-hero-text .pv-badge + .pv-eyebrow { margin-top: 0; }
+
 /* ============ 1. MONOCHROME EDITORIAL ============ */
 .s-mono .pv-top { border-bottom: 2px solid var(--ink); text-transform: uppercase; letter-spacing: .16em; font-size: .72em; }
 .s-mono .pv-sec { border-bottom: 1px solid var(--ink); }
@@ -534,3 +542,47 @@ input[type="password"]:hover { border-color: var(--ink); }
 .s-vibrant .pv-sec.pv-final { background: var(--accent2); color: var(--on-accent2); }
 .s-vibrant .pv-sec.pv-final .pv-btn { background: var(--accent); color: var(--on-accent); }
 @container (max-width: 640px) { .s-vibrant .pv-hero { grid-template-columns: minmax(0, 1fr); } .s-vibrant .pv-hero-text { padding: 11cqw 7cqw; } .s-vibrant .pv-items { grid-template-columns: minmax(0, 1fr); } }
+
+
+/* ---- Style DNA hooks: badge, secondary link, offer box ---- */
+.s-mono .pv-badge { border-bottom: 1px solid var(--ink); padding-bottom: 2px; letter-spacing: .16em; }
+.s-mono .pv-link { text-transform: uppercase; letter-spacing: .14em; font-size: .78em; }
+.s-mono .pv-offer-box { border-top: 2px solid var(--ink); border-bottom: 1px solid var(--ink); padding: 3cqw 0; }
+
+.s-luxury .pv-badge { color: var(--accent); letter-spacing: .34em; font-size: .66em; }
+.s-luxury .pv-link { color: var(--muted); text-transform: uppercase; letter-spacing: .22em; font-size: .68em; font-weight: 400; }
+.s-luxury .pv-offer-box { border: 1px solid var(--line); outline: 1px solid var(--line); outline-offset: -8px; padding: 5cqw 3cqw; }
+.s-luxury .pv-hero-text { align-items: center; }
+
+.s-neo .pv-badge { background: var(--accent2); color: #111; border: 3px solid var(--ink); padding: 2px 10px; transform: rotate(-3deg); font-weight: 900; font-family: var(--body); }
+.s-neo .pv-link { background: #fff; border: 3px solid var(--ink); padding: 12px 18px; text-decoration: none; text-transform: uppercase; font-family: var(--display); font-size: .85em; }
+.s-neo .pv-offer-box { background: #fff; border: 3px solid var(--ink); box-shadow: 8px 8px 0 var(--ink); padding: 4cqw; }
+
+.s-nature .pv-badge { background: #DCE3CC; color: var(--accent); border-radius: 999px; padding: 3px 12px; text-transform: none; letter-spacing: .02em; font-size: .8em; }
+.s-nature .pv-link { color: var(--accent2); font-weight: 600; }
+.s-nature .pv-offer-box { background: var(--surface); border: 1px solid var(--line); border-radius: 36px 36px 36px 8px; padding: 4cqw 4.5cqw; }
+
+.s-serene .pv-badge { color: var(--muted); letter-spacing: .3em; font-size: .64em; }
+.s-serene .pv-link { color: var(--muted); font-weight: 300; }
+.s-serene .pv-offer-box { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 4cqw 0; }
+
+.s-playful .pv-badge { background: var(--accent2); color: #1B1F3B; border-radius: 999px; padding: 4px 12px; font-weight: 800; letter-spacing: .04em; }
+.s-playful .pv-link { background: #fff; border: 2px solid var(--ink); border-radius: 14px; padding: 12px 20px; text-decoration: none; }
+.s-playful .pv-offer-box { background: #fff; border: 2px solid var(--ink); border-radius: 14px; box-shadow: 8px 8px 0 var(--accent2); padding: 4cqw; }
+
+.s-softfem .pv-badge { color: var(--accent); font-family: var(--display); font-style: italic; text-transform: none; letter-spacing: .04em; font-size: .9em; }
+.s-softfem .pv-link { font-family: var(--display); font-style: italic; color: var(--accent); }
+.s-softfem .pv-offer-box { background: var(--surface); border: 1px solid var(--line); border-radius: 200px 200px 6px 6px; padding: 7cqw 4cqw 4cqw; text-align: center; }
+.s-softfem .pv-offer-box .pv-price, .s-softfem .pv-offer-box .pv-cta-row { justify-content: center; }
+
+.s-vibrant .pv-badge { background: var(--accent2); color: var(--on-accent2); border-radius: 4px; padding: 3px 9px; font-weight: 800; }
+.s-vibrant .pv-hero-text .pv-badge { align-self: flex-start; }
+.s-vibrant .pv-link { color: var(--on-accent); }
+.s-vibrant .pv-offer-box { background: var(--accent); color: var(--on-accent); border-radius: 8px; padding: 4.5cqw; }
+.s-vibrant .pv-offer-box .pv-price-now { color: var(--on-accent); font-size: clamp(36px, 7cqw, 68px); }
+.s-vibrant .pv-offer-box .pv-price-old { color: var(--on-accent); opacity: .7; }
+.s-vibrant .pv-offer-box .pv-btn { background: var(--accent2); color: var(--on-accent2); }
+.s-vibrant .pv-offer-box .pv-sk { background: #fff; }
+
+#btn-ai-on { color: var(--accent, #1F6F78); font-weight: 600; }
+.pv.is-thumb .pv-link { display: none; }
