@@ -653,7 +653,7 @@ const L10N = {
            included: 'What\'s included', proof: 'Social proof', offer: 'Offer and pricing', bonus: 'Bonus', faq: 'Questions' },
     cta: { digital: 'Get the product', service: 'Book a consultation', leads: 'Join the list', brand: 'Get in touch',
            physical: 'Shop now', course: 'Join the course', other: 'Learn more' },
-    forAudience: 'For ', yourProduct: 'Your product', placeholder: 'Content for this part will be written from your brief.',
+    forAudience: 'For ', without: 'Without ', within: ' in ', even: 'Even if ', ifYou: 'Right for you if ', help: 'Help ', yourProduct: 'Your product', placeholder: 'Content for this part will be written from your brief.',
     noPrice: 'No price entered yet.', noProof: 'No real proof provided. The prompt will tell Claude to skip this or use truthful trust elements.',
     step: 'Step', provided: 'Provided by you', imageArea: 'Product image area', secondary: 'See what is inside',
     badge: { digital: 'Digital product', service: 'Service', leads: 'Join the list', brand: 'Personal brand', physical: 'Physical product', course: 'Course', other: 'Featured' }
@@ -663,7 +663,7 @@ const L10N = {
            included: 'Isi paket', proof: 'Bukti sosial', offer: 'Penawaran', bonus: 'Bonus', faq: 'Pertanyaan umum' },
     cta: { digital: 'Dapatkan Sekarang', service: 'Jadwalkan Konsultasi', leads: 'Daftar Sekarang', brand: 'Hubungi Saya',
            physical: 'Beli Sekarang', course: 'Gabung Sekarang', other: 'Pelajari Selengkapnya' },
-    forAudience: 'Untuk ', yourProduct: 'Produk kamu', placeholder: 'Isi bagian ini akan ditulis dari brief kamu.',
+    forAudience: 'Untuk ', without: 'Tanpa ', within: ' dalam ', even: 'Walaupun ', ifYou: 'Cocok kalau ', help: 'Bantu ', yourProduct: 'Produk kamu', placeholder: 'Isi bagian ini akan ditulis dari brief kamu.',
     noPrice: 'Harga belum diisi.', noProof: 'Belum ada bukti nyata. Prompt akan meminta Claude melewati bagian ini atau memakai elemen kepercayaan yang jujur.',
     step: 'Langkah', provided: 'Dari kamu', imageArea: 'Area gambar produk', secondary: 'Lihat isinya',
     badge: { digital: 'Produk digital', service: 'Jasa', leads: 'Gabung daftar', brand: 'Brand personal', physical: 'Produk fisik', course: 'Kelas', other: 'Pilihan' }
@@ -772,7 +772,7 @@ const state = {
   gemini: { key: '', remember: false, models: [], busy: false, controller: null, status: { msg: '', kind: 'info' } },
   gen: null,           // last Gemini answer: { projectId, text, model, finish }
   genViewport: 'desktop',
-  hookBusy: false, promptBusy: false, aiSkipFor: '',
+  hookBusy: false, promptBusy: false, aiSkipFor: '', hookAutoFor: '',
   current: null,       // project being edited
   step: 1,
   viewport: 'desktop',
@@ -794,7 +794,7 @@ function defaultProject() {
   return {
     id: uid(), name: '', createdAt: t, updatedAt: t, step: 1, maxStep: 1, aiMode: 'none',
     brief: {
-      productName: '', category: '', description: '', audience: '', problem: '', benefit: '', tried: '', audienceLevel: '',
+      productName: '', category: '', description: '', audience: '', problem: '', benefit: '', tried: '', audienceLevel: '', timeframe: '', effort: '', objection: '',
       goal: '', goalOther: '', platform: state.settings.platform, language: state.settings.language,
       lynkPageType: 'product', outputFormat: 'multi'
     },
@@ -808,7 +808,7 @@ function defaultProject() {
       productImageUrl: '', socialProof: '', tone: 'auto', notes: '', formulas: [], hookPick: ''
     },
     sections: defaultSections('other'), sectionsCustomized: false,
-    hooks: { items: [], recommend: '', reason: '', entry: '', awareness: '', source: '', model: '', stamp: '', notes: [] },
+    hooks: { items: [], recommend: '', reason: '', oneLiner: '', entry: '', awareness: '', source: '', model: '', stamp: '', notes: [] },
     prompt: '', promptBase: '', promptEdited: false, promptSource: 'template', aiBase: ''
   };
 }
@@ -842,7 +842,7 @@ function normalizeProject(raw) {
   if (p.promptSource !== 'ai' && p.promptSource !== 'template') p.promptSource = 'template';
   if (!Array.isArray(p.hooks.items)) p.hooks.items = [];
   p.hooks.items = p.hooks.items.filter(function (it) { return it && typeof it === 'object' && /^[ABC]$/.test(it.id) && typeof it.headline === 'string'; })
-    .map(function (it) { return { id: it.id, headline: it.headline, sub: typeof it.sub === 'string' ? it.sub : '' }; });
+    .map(function (it) { return { id: it.id, headline: it.headline, sub: typeof it.sub === 'string' ? it.sub : '', lever: typeof it.lever === 'string' ? it.lever : '' }; });
   if (!Array.isArray(p.hooks.notes)) p.hooks.notes = [];
   if (['A', 'B', 'C', 'own', ''].indexOf(p.content.hookPick) === -1) p.content.hookPick = '';
   p.step = Math.min(6, Math.max(1, Number(p.step) || 1));
@@ -1016,16 +1016,18 @@ function getHeadline(p) {
 
 /* =====================================================================
    HOOK ENGINE
-   Three hero options (headline + subheadline) from different angles:
-   A = the problem, B = the result, C = how it works. Method: write for
-   the least experienced buyer, say plainly what the product is and does,
-   use the audience's own words, never invent facts. The picked hook is
-   the thread of the whole page and goes into the prompt word for word.
+   Three hero options (headline + subheadline), each pulling a different
+   lever of Hormozi's value equation: value = (dream outcome x belief) /
+   (time x effort). A = problem to dream (+ belief), B = effort and doubt
+   removed, C = concrete result and time. Hook formula: WHO + RESULT +
+   SPEED/EASE + DOUBT REMOVED. Written for the least experienced buyer, in
+   the audience's own words, never inventing facts. The picked hook is the
+   thread of the whole page and goes into the prompt word for word.
    ===================================================================== */
 const HOOK_ANGLES = {
-  A: { key: 'problem', label: 'A. Problem angle', hint: 'Starts from the situation your buyer is in.' },
-  B: { key: 'result', label: 'B. Result angle', hint: 'Starts from what they can do or get afterwards.' },
-  C: { key: 'mechanism', label: 'C. How-it-works angle', hint: 'Starts from the simple way it works.' }
+  A: { key: 'transformation', label: 'A. From problem to dream', hint: 'From the situation they are in to the life they want.' },
+  B: { key: 'effort and doubt', label: 'B. Easy, doubt removed', hint: 'The result without the sacrifice they fear, even if they doubt themselves.' },
+  C: { key: 'result and time', label: 'C. Result and time', hint: 'One concrete result and how fast they can get it.' }
 };
 const AUDIENCE_LEVELS = [
   ['none', 'Never tried anything for this yet'],
@@ -1047,7 +1049,7 @@ function clipWords(s, n) {
 }
 function hookStamp(p) {
   const b = p.brief, c = p.content;
-  return [b.productName, b.description, b.audience, b.audienceLevel, b.problem, b.tried, b.benefit, b.language, c.tone].map(function (x) { return String(x || '').trim(); }).join('|');
+  return [b.productName, b.description, b.audience, b.audienceLevel, b.problem, b.tried, b.benefit, b.timeframe, b.effort, b.objection, c.socialProof, b.language, c.tone].map(function (x) { return String(x || '').trim(); }).join('|');
 }
 /* The hook that feeds the preview and the prompt, or null when none is picked yet. */
 function activeHook(p) {
@@ -1061,30 +1063,41 @@ function activeHook(p) {
 }
 
 /* Without AI: three drafts built only from the user's own words. Nothing is invented. */
+function lowerFirst(s) { s = String(s || ''); return s.charAt(0).toLowerCase() + s.slice(1); }
 function draftHooksRules(p) {
   const b = p.brief, L = L10N[b.language] || L10N.en;
   const dot = function (s) { s = String(s || '').trim(); return s && !/[.!?…]$/.test(s) ? s + '.' : s; };
   const join = function (a, z) { return clipWords([dot(a), dot(z)].filter(Boolean).join(' '), 25); };
   const desc = firstSentence(b.description);
-  const aud = b.audience.trim() ? L.forAudience + b.audience.trim() : '';
+  const audName = b.audience.trim();
+  const aud = audName ? L.forAudience + audName : '';
   const problem = splitLines(b.problem)[0] || '';
-  const benefits = splitLines(b.benefit);
+  const dream = splitLines(b.benefit)[0] || '';
+  const time = b.timeframe.trim(), effort = b.effort.trim(), doubt = b.objection.trim();
   const notes = [];
-  if (!problem) notes.push('No customer problem was entered, so option A uses your description. Add the problem in Step 1 for a sharper hook.');
-  if (!benefits.length) notes.push('No benefit was entered, so option B uses your description. Add the benefit in Step 1 for a sharper hook.');
+  if (!dream) notes.push('No desired result was entered, so the hooks fall back to your description. Add it in Step 1 for much sharper hooks.');
+  if (!problem) notes.push('No customer problem was entered. Add it in Step 1 so option A can start from it.');
+  if (!time) notes.push('No timeframe was entered, so option C has no time promise. Add one in Step 1 only if it is true.');
+  if (!effort && !doubt) notes.push('No "what they do not have to do" and no biggest doubt were entered, so option B is generic.');
+  let bHead = desc || b.productName;
+  if (dream && effort) bHead = capFirst(dream) + ', ' + lowerFirst(L.without) + effort;
+  else if (effort) bHead = L.without + effort;
+  else if (doubt) bHead = L.even + lowerFirst(doubt);
   const items = [
-    { id: 'A', headline: capFirst(clipWords(problem || desc || b.productName, 12)), sub: join(desc, aud) },
-    { id: 'B', headline: capFirst(clipWords(benefits[0] || desc || b.productName, 12)), sub: join(aud, benefits[1] ? capFirst(benefits[1]) : desc) },
-    { id: 'C', headline: capFirst(clipWords(desc || b.productName, 12)), sub: join(aud, benefits[0] ? capFirst(benefits[0]) : '') }
+    { id: 'A', headline: capFirst(clipWords(dream || problem || desc || b.productName, 12)), sub: join(problem ? L.ifYou + lowerFirst(problem) : aud, desc), lever: 'dream outcome + belief' },
+    { id: 'B', headline: capFirst(clipWords(bHead, 12)), sub: join(doubt ? capFirst(L.even + lowerFirst(doubt)) : aud, desc || dream), lever: 'less effort + doubt removed' },
+    { id: 'C', headline: capFirst(clipWords((dream || desc || b.productName) + (time ? L.within + time : ''), 12)), sub: join(aud, desc), lever: 'concrete result + less waiting' }
   ];
-  const rec = benefits.length ? 'B' : problem ? 'A' : 'C';
+  const rec = time && dream ? 'C' : (effort || doubt) ? 'B' : (dream || problem) ? 'A' : 'C';
+  const reason = rec === 'C' ? 'It names a concrete result and how fast they get it, using the time and result you entered.'
+    : rec === 'B' ? 'It removes the effort and doubt you entered, which is what usually stops this audience.'
+    : 'It starts from the problem and the result you entered, in your own words.';
+  let oneLiner = '';
+  if (audName && dream) {
+    oneLiner = L.help + (audName.split(/[,(;]|\s+yang\s+|\s+who\s+/i)[0].trim() || audName) + ' ' + lowerFirst(dream) + (time ? L.within + time : '') + (effort ? ', ' + lowerFirst(L.without) + effort : '') + (doubt ? ', ' + lowerFirst(L.even) + lowerFirst(doubt) : '') + '.';
+  }
   const read = AUDIENCE_READ[b.audienceLevel] || AUDIENCE_READ.mixed;
-  return {
-    items: items, recommend: rec, source: 'rules', model: '', stamp: '', notes: notes,
-    reason: rec === 'B' ? 'It leads with the result you entered, which is the easiest thing for a first-time reader to care about.'
-      : rec === 'A' ? 'It starts from the problem you entered, in your own words.' : 'It says plainly what the product is and does.',
-    entry: read[0], awareness: read[1]
-  };
+  return { items: items, recommend: rec, reason: reason, oneLiner: oneLiner, entry: read[0], awareness: read[1], source: 'rules', model: '', stamp: '', notes: notes };
 }
 
 /* With AI: the request sent to Gemini. The answer must be JSON. */
@@ -1092,39 +1105,50 @@ function hookPrompt(p, avoid) {
   const b = p.brief, c = p.content;
   const v = function (x) { return String(x || '').trim() || 'Not provided'; };
   const lang = b.language === 'id' ? 'Indonesian (Bahasa Indonesia)' : 'English';
-  const tone = c.tone === 'casual' ? 'casual and warm (for Indonesian use aku/kamu and everyday words)'
+  const tone = c.tone === 'casual' ? 'casual and warm (for Indonesian use aku/kamu or the audience\'s own way of addressing, and everyday words)'
     : c.tone === 'formal' ? 'formal and professional' : 'match the audience: warm and practical for parents and beginners, direct for professionals';
   const out = [
-    'You are a senior conversion copywriter. Write THREE hero options (headline + subheadline) for a landing page. Work only from the brief below. Do not invent facts.',
+    'You are a direct-response copywriter who works with Alex Hormozi\'s campaign framework. Write THREE hero options (headline + subheadline) for a landing page, plus one core message. Work only from the brief below. Do not invent facts.',
     '',
     'BRIEF',
     '- Product: ' + v(b.productName),
     '- Category: ' + v(labelOf(CATEGORIES, b.category)),
     '- What it is: ' + v(b.description),
-    '- Target audience: ' + v(b.audience),
-    '- How familiar the audience is with the topic: ' + v(labelOf(AUDIENCE_LEVELS, b.audienceLevel)),
-    '- Main problem: ' + v(b.problem),
+    '- Target market (the avatar): ' + v(b.audience),
+    '- How familiar they are with the topic: ' + v(labelOf(AUDIENCE_LEVELS, b.audienceLevel)),
+    '- Main problem of the target market: ' + v(b.problem),
+    '- Desired outcome (the dream): ' + v(b.benefit),
     '- What they already tried and why it fell short: ' + v(b.tried),
-    '- Desired result or main benefit: ' + v(b.benefit),
+    '- How fast they can get a first result: ' + v(b.timeframe),
+    '- What they do NOT have to do or give up (effort and sacrifice removed): ' + v(b.effort),
+    '- Their biggest doubt (the "even if"): ' + v(b.objection),
+    '- Real proof available: ' + v(c.socialProof),
     '- Page goal: ' + goalLabel(p),
     '- Language of the copy: ' + lang,
     '- Tone: ' + tone,
     '- Extra notes: ' + v([c.brandNotes, c.notes].filter(function (x) { return String(x || '').trim(); }).join(' / ')),
     '',
+    'FRAMEWORK. Value equation: value = (dream outcome x belief they can get it) / (time they wait x effort and sacrifice). A strong hook raises the top or lowers the bottom for ONE specific reader.',
+    'HOOK FORMULA: WHO + RESULT + SPEED/EASE + DOUBT REMOVED. The headline carries the reader (their situation) and the RESULT, plus one friction remover if it fits. The subheadline carries the rest and states plainly what the product is and does.',
+    '',
     'METHOD',
-    '1. First decide the ENTRY LEVEL (the least experienced person in this audience) and the AWARENESS LEVEL (unaware, problem-aware, solution-aware or product-aware).',
-    '2. Write all three options for the entry-level person. Do not assume tools they used, attempts they made or terms they know, unless the brief says the whole audience did. If a problem angle only fits experienced people, rewrite it for the beginner.',
-    '3. The three options come from different angles: A = the problem (their situation in their own words), B = the result (what they can do or get), C = how it works (the simple mechanism or first step).',
-    '4. Headline and subheadline together must make clear, at a glance, what the product is, who it is for and what it does for them. The subheadline states plainly what it is and does.',
-    '5. No jargon in the headline or subheadline (for example database, deployment, API, UI, funnel) unless the brief shows the audience knows it.',
-    '6. Sound like one person talking to one reader. If you would not say it to a friend on WhatsApp, rewrite it. No stacked "Bukan X, tapi Y" lines, no slogan filler, no clickbait. Never hide what the product is for the sake of curiosity.',
-    '7. Headline: 12 words or fewer. Subheadline: 25 words or fewer.',
-    '8. No invented numbers, testimonials, guarantees, results or scarcity. No urgency unless the brief states a real deadline or limit.',
+    '1. Read the brief and extract: the avatar in their own words, the main problem, the dream outcome (make it specific), the time, the effort and sacrifice removed, the doubt, the proof. Start every option from the main problem and the dream outcome, never from product features.',
+    '2. The three options pull different levers:',
+    '   A = transformation: from the situation they are in (the main problem) to the life they want (the dream outcome). Pulls dream outcome and belief.',
+    '   B = effort and doubt: the result without the sacrifice they fear, even if they doubt themselves. Use the effort-removed and doubt lines. Pulls effort and belief.',
+    '   C = result and time: one concrete result and how fast they get it, or the first small win. Pulls time and a specific result.',
+    '   If the brief gives nothing for a lever (no time, no effort, no doubt), do not invent it: write that option from the closest honest fact.',
+    '3. First decide the ENTRY LEVEL (the least experienced person in this audience) and the AWARENESS LEVEL (unaware, problem-aware, solution-aware, product-aware). Write for the entry-level person. Do not assume tools they used, attempts they made or terms they know unless the brief says the whole audience did.',
+    '4. Use the audience\'s own words. Translate product jargon into the everyday words they would use (for a non-technical audience, for example, say "aplikasi yang dibuka lewat link" instead of "web app", and "contekan pesan ke AI" instead of "prompt"). No jargon in the hero.',
+    '5. Sound like one person talking to one reader (the WhatsApp test). No stacked "Bukan X, tapi Y" lines, no slogan filler, no clickbait. Never hide what the product is for the sake of curiosity.',
+    '6. Headline: 12 words or fewer. Subheadline: 25 words or fewer.',
+    '7. Honesty: no invented numbers, testimonials, guarantees, timeframes or results. Never promise income. Use a guarantee, number or timeframe only if it is in the brief. No urgency unless the brief states a real deadline or limit.',
+    '8. Core message: ONE sentence in this shape: help [avatar] [dream outcome] in [time], without [sacrifice], even if [doubt]. Leave out any part the brief does not support.',
     '9. Recommend ONE option and give a one-sentence reason (in English).'
   ];
   if (avoid && avoid.length) out.push('10. Do not repeat these earlier options: ' + avoid.join(' | '));
   out.push('', 'Answer with JSON only, in exactly this shape:',
-    '{"entry_level":"...","awareness":"...","options":[{"angle":"problem","headline":"...","sub":"..."},{"angle":"result","headline":"...","sub":"..."},{"angle":"mechanism","headline":"...","sub":"..."}],"recommend":"A","reason":"..."}');
+    '{"entry_level":"...","awareness":"...","one_liner":"...","options":[{"angle":"transformation","lever":"...","headline":"...","sub":"..."},{"angle":"effort and doubt","lever":"...","headline":"...","sub":"..."},{"angle":"result and time","lever":"...","headline":"...","sub":"..."}],"recommend":"A","reason":"..."}');
   return out.join('\n');
 }
 
@@ -1144,12 +1168,12 @@ function normalizeAiHooks(data, model) {
   const flat = function (x, n) { return clip(String(x || '').replace(/\s+/g, ' '), n); };
   const items = ids.map(function (id, i) {
     const o = data.options[i] || {};
-    return { id: id, headline: flat(o.headline, 160), sub: flat(o.sub || o.subheadline, 300) };
+    return { id: id, headline: flat(o.headline, 160), sub: flat(o.sub || o.subheadline, 300), lever: flat(o.lever, 80) };
   });
   if (items.some(function (it) { return !it.headline; })) return null;
   const rec = String(data.recommend || '').toUpperCase();
   return {
-    items: items, recommend: ids.indexOf(rec) !== -1 ? rec : 'B', reason: flat(data.reason, 240),
+    items: items, recommend: ids.indexOf(rec) !== -1 ? rec : 'B', reason: flat(data.reason, 240), oneLiner: flat(data.one_liner || data.oneLiner, 400),
     entry: flat(data.entry_level, 200), awareness: flat(data.awareness, 120), source: 'ai', model: model, stamp: '', notes: []
   };
 }
@@ -1397,6 +1421,9 @@ function buildPrompt(p) {
   line('Main benefit or desired outcome', b.benefit, 'Not provided. Derive benefits only from the description above.');
   line('What they already tried, and why it fell short', b.tried, 'Not provided. Do not assume any earlier attempts.');
   line('How familiar the audience is with the topic', labelOf(AUDIENCE_LEVELS, b.audienceLevel), 'Not specified. Assume the audience is new to the topic.');
+  line('How fast they can get a first result', b.timeframe, 'Not provided. Do not promise any timeframe.');
+  line('What they do NOT have to do or give up', b.effort, 'Not provided. Do not claim the product is easy or effortless.');
+  line('Their biggest doubt', b.objection, 'Not provided. Infer only a mild, general doubt from the description.');
   out.push('');
   out.push('Before writing, work out these eight points privately and do not print them: (1) who exactly the reader is, (2) their main need or problem, (3) what the product is and includes, (4) the one or two benefits that matter most to them, (5) why this product deserves consideration, (6) what doubt would stop them buying, (7) what action you want after reading, (8) who the least experienced buyer in this audience is. Write the hero for that person: no assumed experience, tools or jargon. Use only the facts above or reasonable inferences from them.');
 
@@ -1464,6 +1491,8 @@ function buildPrompt(p) {
   out.push('- Order of persuasion across the page: the visitor first understands what this is and who it is for, then recognises their own problem, then feels the need, then understands exactly what they get and how it works, and only then meets the reason to act. Never put price pressure before the offer is understood.');
   out.push('- Sound like one person talking to one reader, in one register for the whole page (headlines, price block, CTA and FAQ included). If you would not say a line to a friend on WhatsApp, rewrite it. Use a "Not X, but Y" line at most once, and no slogan filler.');
   out.push('- Define any unavoidable jargon in one plain sentence the first time it appears, and keep it out of the hero.');
+  out.push('- Offer logic (value equation): raise the dream outcome and the reader\'s belief that it is possible; lower the wait and the effort. Hero: the dream outcome plus the speed or ease if the brief gives one. Problem and solution: build belief through the mechanism and real proof only. Benefits and contents: show how each part removes a specific obstacle of time or effort. Offer: for each obstacle the reader fears, name the part of the offer that removes it, using only parts listed in this brief.');
+  out.push('- Never promise income or results. If results are mentioned, tie them to real proof from this brief, and do not invent a guarantee.');
   out.push('- Each section must add a new argument or fact. Do not repeat the same message in new words in another section.');
   out.push('- Clarity beats hype. Avoid generic phrases that fit any product, for example ' + GENERIC_PHRASES + '. They are not banned if a specific context truly justifies them, but never use them as defaults.');
   out.push('- Handle the doubts a reader of this product would likely have (who it is for, what exactly they get, how access or delivery works, how to pay, what to do if unsure) using only facts from this brief. Where a fact is missing write a clearly marked placeholder such as [to be confirmed]; never guess.');
@@ -1475,6 +1504,7 @@ function buildPrompt(p) {
   }
   else if (c.headline.trim()) out.push('- Headline idea from me: "' + c.headline.trim() + '". Keep its meaning and intent, but you may sharpen clarity and pull.');
   else out.push('- Hero headline: write several candidate headlines privately, score them for relevance, clarity, differentiation and pull, and keep the best one. It must state what this is and who it is for. Do not show the alternatives on the page.');
+  if (p.hooks.oneLiner.trim()) out.push('- Core message (one sentence; every section must support it, and the hero says it in the reader\'s words): "' + p.hooks.oneLiner.trim() + '"');
   out.push('- Never invent: testimonials, customer counts, ratings, prices, discounts, guarantees, certifications, results, scarcity, deadlines, bonuses or any business fact not stated here.');
   out.push('- Urgency or scarcity appears only when a real deadline or limit is stated in this brief.');
   line('Brand notes', c.brandNotes, 'None.');
@@ -2001,7 +2031,7 @@ function hookCard(p, it) {
   return el('div', { class: 'hook' + (radio.checked ? ' is-selected' : ''), 'data-hook': it.id },
     el('label', { class: 'hook-head', for: 'hook-pick-' + it.id }, radio, el('span', null, meta.label),
       p.hooks.recommend === it.id ? el('span', { class: 'chip' }, 'Recommended') : null,
-      el('span', { class: 'hook-angle-hint' }, meta.hint)),
+      el('span', { class: 'hook-angle-hint' }, it.lever ? 'Pulls: ' + it.lever : meta.hint)),
     el('div', { class: 'field' }, el('label', { for: 'hook-h-' + it.id }, 'Headline'), hIn, hCount),
     el('div', { class: 'field' }, el('label', { for: 'hook-s-' + it.id }, 'Subheadline'), sIn, sCount));
 }
@@ -2023,6 +2053,10 @@ function renderHooks() {
   if (h.items.length) {
     if (h.entry || h.awareness) meta.append(el('p', null, el('strong', null, 'Audience check: '), 'least experienced buyer = ' + (h.entry || 'n/a') + '; awareness = ' + (h.awareness || 'n/a') + '.'));
     if (h.recommend) meta.append(el('p', null, el('strong', null, 'My pick: ' + h.recommend + '. '), h.reason || ''));
+    const ol = el('textarea', { id: 'hook-oneliner', rows: '2' });
+    ol.value = h.oneLiner || '';
+    ol.addEventListener('input', function () { h.oneLiner = ol.value; scheduleSave(); });
+    meta.append(el('div', { class: 'field' }, el('label', { for: 'hook-oneliner' }, 'Core message (one sentence the whole page supports)'), ol));
     (h.notes || []).forEach(function (t) { meta.append(el('p', { class: 'muted small' }, t)); });
     meta.append(el('p', { class: 'muted small' }, h.source === 'ai' ? 'Written by ' + (h.model || 'Gemini') + ' from your brief. Edit any line.' : 'Drafted from your own words with fixed rules, nothing invented. Edit any line before you use it.'));
   }
@@ -2046,6 +2080,23 @@ function runHooksRules() {
   setHookStatus('Drafted from your own words. Edit any line, then pick one.', 'ok');
 }
 
+/* Tries the chosen model first, then another one when Google says quota, overload or not found. */
+async function callGeminiAny(prompt, signal, opts) {
+  const first = state.settings.geminiModel;
+  const pool = state.gemini.models.length ? state.gemini.models : GEMINI_DEFAULT_MODELS;
+  const list = [first].concat(pool.filter(function (m) { return m !== first; })).slice(0, 3);
+  let lastErr = null;
+  for (let i = 0; i < list.length; i++) {
+    try { const r = await callGemini(prompt, list[i], signal, opts); r.model = list[i]; return r; }
+    catch (e) {
+      lastErr = e;
+      if (e && e.name === 'AbortError') throw e;
+      if ([404, 429, 500, 502, 503, 504].indexOf(e && e.status) === -1) throw e;
+    }
+  }
+  throw lastErr;
+}
+
 async function runHooksAi() {
   const p = state.current, g = state.gemini;
   if (!p || state.hookBusy) return;
@@ -2055,23 +2106,31 @@ async function runHooksAi() {
     const k = $('#gh-key'); if (k) k.focus();
     return;
   }
-  const model = state.settings.geminiModel;
   const avoid = p.hooks.items.map(function (it) { return it.headline; }).filter(Boolean);
   const controller = new AbortController(); let timedOut = false;
   const timer = setTimeout(function () { timedOut = true; controller.abort(); }, 120000);
   state.hookBusy = true; setHookBusy(true);
-  setHookStatus('Asking Gemini (' + model + ') for three hooks…', 'info');
+  setHookStatus('Gemini is reading your brief and writing three hooks…', 'info');
   try {
-    const r = await callGemini(hookPrompt(p, avoid), model, controller.signal, { json: true });
-    const res = normalizeAiHooks(parseJsonLoose(r.text), model);
+    const r = await callGeminiAny(hookPrompt(p, avoid), controller.signal, { json: true });
+    const res = normalizeAiHooks(parseJsonLoose(r.text), r.model);
     if (!res) throw new Error('Gemini did not return three usable hooks. Try again, or choose "Draft without AI".');
     setHooks(p, res);
-    setHookStatus('Done. Edit any line, then pick one.', 'ok');
+    setHookStatus('Done (' + r.model + '). Edit any line, then pick one.', 'ok');
   } catch (e) {
     if (e && e.name === 'AbortError') setHookStatus(timedOut ? 'Gemini took too long. Try again or choose a Flash model.' : 'Cancelled.', timedOut ? 'error' : 'info');
     else setHookStatus(e.message, 'error');
   }
   clearTimeout(timer); state.hookBusy = false; setHookBusy(false);
+}
+
+/* In With AI mode the hooks are written as soon as Step 5 opens. */
+function maybeAutoHooks() {
+  const p = state.current;
+  if (!p || p.aiMode !== 'gemini' || !state.gemini.key || state.hookBusy || p.hooks.items.length) return;
+  const st = hookStamp(p);
+  if (state.hookAutoFor === st) return;
+  state.hookAutoFor = st; runHooksAi();
 }
 
 /* ---------- Step 6: tailored prompt written by AI ---------- */
@@ -2090,8 +2149,8 @@ function aiPromptRequest(template, p) {
     '3. Keep every platform, technical, responsive, quality-check and output-format rule from the template exactly as written (sections 8, 10, 11 and 12)' + (lynk ? ', including every Lynk.id inline-CSS limit' : '') + '. Do not weaken or drop any of them.',
     '4. Keep every "do not invent" rule. Use only facts that appear in the brief. Where a fact is missing, write [to be confirmed] instead of guessing.',
     '5. Keep the Style DNA (sections 5 and 7) intact. You may add detail, never contradict it.',
-    '6. Use the hero headline and subheadline from the brief word for word. Make the problem, solution and closing sections echo the same angle.',
-    '7. Replace generic instruction text in sections 1 to 4 and 6 with direction written for this product: for every enabled section add a short "Copy direction" line listing the actual points to cover, drawn from the brief (audience, problem, what they tried, benefit, offer). Do not write the full page copy.',
+    '6. Use the hero headline and subheadline from the brief word for word. Make the problem, solution and closing sections echo the same angle, and keep every section consistent with the core message if one is given.',
+    '7. Replace generic instruction text in sections 1 to 4 and 6 with direction written for this product: for every enabled section add a short "Copy direction" line listing the actual points to cover, drawn from the brief (audience, problem, what they tried, benefit, offer). Do not write the full page copy. Raise the dream outcome and the belief that it is possible, lower the wait and the effort, and turn each obstacle the buyer fears into a named part of the offer (only parts listed in the brief).',
     '8. Write for the least experienced buyer in the audience. Keep jargon out of the hero and define unavoidable terms in one plain sentence.',
     '9. Sound like one person talking to one reader, in one register for the whole page.',
     '10. The prompt itself stays in English; the page copy language is the one named in the brief.',
@@ -2121,27 +2180,33 @@ async function writePromptWithAI(auto) {
     const det = $('#gkey-details'); if (det) det.open = true;
     return;
   }
-  const model = state.settings.geminiModel;
+  const ta = $('#prompt-text');
   const controller = new AbortController(); let timedOut = false;
   const timer = setTimeout(function () { timedOut = true; controller.abort(); }, 180000);
   state.promptBusy = true; setPromptBusy(true);
-  setStatus('Gemini (' + model + ') is writing a tailored prompt from your brief and hook. This can take up to a minute…', 'info');
+  ta.value = ''; ta.placeholder = 'Gemini is writing a tailored prompt from your brief and your hook. This can take up to a minute…'; updatePromptStats();
+  setStatus('Gemini is writing a tailored prompt from your brief and hook…', 'info');
   try {
-    const r = await callGemini(aiPromptRequest(template, p), model, controller.signal);
+    const r = await callGeminiAny(aiPromptRequest(template, p), controller.signal);
     if (r.finish === 'MAX_TOKENS') throw new Error('The AI answer was cut off at the length limit.');
     const t = cleanAiPrompt(r.text);
-    if (t.length < template.length * 0.6 || !/^#/m.test(t) || (p.brief.platform === 'lynk' && !/inline/i.test(t))) throw new Error('The AI answer looks incomplete.');
+    if (t.length < template.length * 0.45) throw new Error('The AI answer is much shorter than the template, so it probably dropped rules.');
+    if (!/^#/m.test(t)) throw new Error('The AI answer lost the section headings.');
+    if (p.brief.platform === 'lynk' && !/inline/i.test(t)) throw new Error('The AI answer dropped the Lynk.id inline-CSS rules.');
     p.prompt = t; p.promptBase = t; p.promptEdited = false; p.promptSource = 'ai'; p.aiBase = template;
     state.aiSkipFor = '';
-    if (state.current === p) { $('#prompt-text').value = t; updatePromptStats(); $('#prompt-notice').hidden = true; }
+    if (state.current === p) { ta.value = t; $('#prompt-notice').hidden = true; }
     scheduleSave();
-    setStatus('Prompt written by ' + model + ' from your brief and hook. Read it, edit if you like, then copy.', 'ok');
+    setStatus('Prompt written by ' + r.model + ' from your brief and hook. Read it, edit if you like, then copy.', 'ok');
   } catch (e) {
     state.aiSkipFor = template;
+    if (state.current === p) ta.value = p.prompt;
     const why = e && e.name === 'AbortError' ? (timedOut ? 'Gemini took too long.' : 'Cancelled.') : e.message;
     setStatus(why + ' The template version is shown instead. Choose "Rewrite Prompt with AI" to try again.', 'error');
+    toast('AI could not write the prompt: ' + why + ' The template version is shown.', 'error', 7000);
   }
-  clearTimeout(timer); state.promptBusy = false; setPromptBusy(false);
+  clearTimeout(timer); ta.placeholder = ''; updatePromptStats();
+  state.promptBusy = false; setPromptBusy(false);
 }
 
 function useTemplatePrompt() {
@@ -2746,7 +2811,7 @@ function renderReview() {
 
   $('#preview-block').hidden = !state.previewShown;
   if (state.previewShown) renderPreviewPanel();
-  renderHooks(); applyAiModeToHooks();
+  renderHooks(); applyAiModeToHooks(); maybeAutoHooks();
 }
 function renderPreviewPanel() {
   const p = state.current, frame = $('#preview-frame');

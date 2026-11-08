@@ -231,6 +231,7 @@
           <div class="field full">
             <label for="f-brief-problem">Main customer problem</label>
             <textarea id="f-brief-problem" data-bind="brief.problem" rows="3"></textarea>
+            <p class="hint">Write it the way your customer would say it, not the way you would. The hero hooks start from this.</p>
           </div>
           <div class="field full">
             <label for="f-brief-tried">What they already tried, and why it fell short</label>
@@ -245,7 +246,22 @@
           <div class="field full">
             <label for="f-brief-benefit">Main benefit or desired outcome</label>
             <textarea id="f-brief-benefit" data-bind="brief.benefit" rows="3"></textarea>
-            <p class="hint">Tip: put one benefit per line to see each one in the preview.</p>
+            <p class="hint">The life or result they want (their dream), not the product features. Tip: put one benefit per line to see each one in the preview.</p>
+          </div>
+          <div class="field">
+            <label for="f-brief-timeframe">How fast can they get a first result?</label>
+            <input id="f-brief-timeframe" type="text" data-bind="brief.timeframe" autocomplete="off" placeholder="Optional. e.g. 14 hari, or 60 menit untuk app pertama">
+            <p class="hint">Only a time that is true. If you leave it empty, no time promise is written.</p>
+          </div>
+          <div class="field">
+            <label for="f-brief-effort">What do they NOT have to do or give up?</label>
+            <input id="f-brief-effort" type="text" data-bind="brief.effort" autocomplete="off" placeholder="Optional. e.g. coding, laptop, ninggalin anak">
+            <p class="hint">The effort or sacrifice your product takes away.</p>
+          </div>
+          <div class="field full">
+            <label for="f-brief-objection">Their biggest doubt (the "even if")</label>
+            <input id="f-brief-objection" type="text" data-bind="brief.objection" autocomplete="off" placeholder="Optional. e.g. gaptek dan cuma punya HP">
+            <p class="hint">What they tell themselves before they buy, for example "I am not techy". It becomes the "even if" in your hook.</p>
           </div>
           <div class="field">
             <label for="f-brief-platform">Platform <span class="req">Required</span></label>
