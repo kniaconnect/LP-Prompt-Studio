@@ -586,3 +586,19 @@ input[type="password"]:hover { border-color: var(--ink); }
 
 #btn-ai-on { color: var(--accent, #1F6F78); font-weight: 600; }
 .pv.is-thumb .pv-link { display: none; }
+
+/* Hook picker (Step 5) */
+.hook-block { margin-top: var(--s6); padding-top: var(--s5); border-top: 1px solid var(--line); margin-bottom: var(--s6); }
+.hook-block > * + * { margin-top: var(--s4); }
+.hook-set { border: 0; padding: 0; margin-left: 0; min-width: 0; }
+.hook-set legend { font: 600 0.8rem/1.3 var(--sans); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding: 0; margin-bottom: var(--s2); }
+.hook-list { display: grid; gap: var(--s4); }
+.hook { border: 1px solid var(--line-strong); border-radius: var(--r); padding: var(--s4); background: #fff; display: grid; gap: var(--s3); }
+.hook.is-selected { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.hook-head { display: flex; gap: var(--s3); align-items: center; flex-wrap: wrap; font-weight: 600; cursor: pointer; min-height: 44px; }
+.hook-head input { width: 20px; height: 20px; accent-color: var(--accent); flex: none; }
+.hook-angle-hint { font-weight: 400; color: var(--muted); font-size: 0.85rem; }
+.hook-own-text { font: 600 1.05rem var(--serif); }
+.hook-meta { font-size: 0.9rem; }
+.hook-meta > * + * { margin-top: var(--s2); }
+.hook .is-over { color: var(--err); font-weight: 600; }

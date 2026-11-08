@@ -772,6 +772,7 @@ const state = {
   gemini: { key: '', remember: false, models: [], busy: false, controller: null, status: { msg: '', kind: 'info' } },
   gen: null,           // last Gemini answer: { projectId, text, model, finish }
   genViewport: 'desktop',
+  hookBusy: false, promptBusy: false, aiSkipFor: '',
   current: null,       // project being edited
   step: 1,
   viewport: 'desktop',
@@ -793,7 +794,7 @@ function defaultProject() {
   return {
     id: uid(), name: '', createdAt: t, updatedAt: t, step: 1, maxStep: 1, aiMode: 'none',
     brief: {
-      productName: '', category: '', description: '', audience: '', problem: '', benefit: '',
+      productName: '', category: '', description: '', audience: '', problem: '', benefit: '', tried: '', audienceLevel: '',
       goal: '', goalOther: '', platform: state.settings.platform, language: state.settings.language,
       lynkPageType: 'product', outputFormat: 'multi'
     },
@@ -804,10 +805,11 @@ function defaultProject() {
     },
     content: {
       headline: '', regularPrice: '', promoPrice: '', ctaLabel: '', ctaUrl: '', colors: '', brandNotes: '',
-      productImageUrl: '', socialProof: '', tone: 'auto', notes: '', formulas: []
+      productImageUrl: '', socialProof: '', tone: 'auto', notes: '', formulas: [], hookPick: ''
     },
     sections: defaultSections('other'), sectionsCustomized: false,
-    prompt: '', promptBase: '', promptEdited: false
+    hooks: { items: [], recommend: '', reason: '', entry: '', awareness: '', source: '', model: '', stamp: '', notes: [] },
+    prompt: '', promptBase: '', promptEdited: false, promptSource: 'template', aiBase: ''
   };
 }
 
@@ -837,6 +839,12 @@ function normalizeProject(raw) {
   p.design.recommend.results = p.design.recommend.results.filter(function (id) { return STYLE_BY_ID[id]; });
   if (p.design.styleId && !STYLE_BY_ID[p.design.styleId]) p.design.styleId = '';
   if (p.aiMode !== 'none' && p.aiMode !== 'gemini') p.aiMode = 'none';
+  if (p.promptSource !== 'ai' && p.promptSource !== 'template') p.promptSource = 'template';
+  if (!Array.isArray(p.hooks.items)) p.hooks.items = [];
+  p.hooks.items = p.hooks.items.filter(function (it) { return it && typeof it === 'object' && /^[ABC]$/.test(it.id) && typeof it.headline === 'string'; })
+    .map(function (it) { return { id: it.id, headline: it.headline, sub: typeof it.sub === 'string' ? it.sub : '' }; });
+  if (!Array.isArray(p.hooks.notes)) p.hooks.notes = [];
+  if (['A', 'B', 'C', 'own', ''].indexOf(p.content.hookPick) === -1) p.content.hookPick = '';
   p.step = Math.min(6, Math.max(1, Number(p.step) || 1));
   p.maxStep = Math.min(6, Math.max(p.step, Number(p.maxStep) || 1));
   return p;
@@ -995,6 +1003,8 @@ function sampleProject() {
 function getHeadline(p) {
   const b = p.brief, c = p.content, L = L10N[b.language] || L10N.en;
   const aud = b.audience ? L.forAudience + b.audience.trim() : '';
+  const hk = activeHook(p);
+  if (hk && hk.id !== 'own') return { text: hk.headline, sub: hk.sub || clip(firstSentence(b.description) || aud, 170), draft: false };
   if (c.headline.trim()) {
     return { text: c.headline.trim(), sub: clip(firstSentence(b.description) || aud, 170), draft: false };
   }
@@ -1002,6 +1012,146 @@ function getHeadline(p) {
   if (benefit) return { text: capFirst(clip(benefit, 90)), sub: clip(firstSentence(b.description) || aud, 170), draft: true };
   if (b.description.trim()) return { text: clip(firstSentence(b.description), 90), sub: aud, draft: true };
   return { text: b.productName.trim() || L.yourProduct, sub: aud, draft: true };
+}
+
+/* =====================================================================
+   HOOK ENGINE
+   Three hero options (headline + subheadline) from different angles:
+   A = the problem, B = the result, C = how it works. Method: write for
+   the least experienced buyer, say plainly what the product is and does,
+   use the audience's own words, never invent facts. The picked hook is
+   the thread of the whole page and goes into the prompt word for word.
+   ===================================================================== */
+const HOOK_ANGLES = {
+  A: { key: 'problem', label: 'A. Problem angle', hint: 'Starts from the situation your buyer is in.' },
+  B: { key: 'result', label: 'B. Result angle', hint: 'Starts from what they can do or get afterwards.' },
+  C: { key: 'mechanism', label: 'C. How-it-works angle', hint: 'Starts from the simple way it works.' }
+};
+const AUDIENCE_LEVELS = [
+  ['none', 'Never tried anything for this yet'],
+  ['tried', 'Has tried before but got stuck'],
+  ['similar', 'Already uses similar products'],
+  ['mixed', 'Mixed levels']
+];
+const AUDIENCE_READ = {
+  none: ['Complete beginner, has tried nothing yet', 'Unaware or problem-aware'],
+  tried: ['Has tried before and got stuck', 'Problem-aware or solution-aware'],
+  similar: ['Already uses similar products', 'Solution-aware or product-aware'],
+  mixed: ['Mixed audience: the hero speaks to the newest person', 'Mixed']
+};
+
+function wordCount(s) { const t = String(s || '').trim(); return t ? t.split(/\s+/).length : 0; }
+function clipWords(s, n) {
+  const w = String(s || '').trim().split(/\s+/).filter(Boolean);
+  return w.length > n ? w.slice(0, n).join(' ').replace(/[,;:\-–]+$/, '') + '…' : w.join(' ');
+}
+function hookStamp(p) {
+  const b = p.brief, c = p.content;
+  return [b.productName, b.description, b.audience, b.audienceLevel, b.problem, b.tried, b.benefit, b.language, c.tone].map(function (x) { return String(x || '').trim(); }).join('|');
+}
+/* The hook that feeds the preview and the prompt, or null when none is picked yet. */
+function activeHook(p) {
+  const pick = p.content.hookPick;
+  if (pick === 'own') { const h = p.content.headline.trim(); return h ? { id: 'own', headline: h, sub: '', angle: '' } : null; }
+  const it = (p.hooks.items || []).filter(function (x) { return x.id === pick; })[0];
+  if (it && String(it.headline || '').trim()) {
+    return { id: it.id, headline: it.headline.trim(), sub: String(it.sub || '').trim(), angle: HOOK_ANGLES[it.id].key };
+  }
+  return null;
+}
+
+/* Without AI: three drafts built only from the user's own words. Nothing is invented. */
+function draftHooksRules(p) {
+  const b = p.brief, L = L10N[b.language] || L10N.en;
+  const dot = function (s) { s = String(s || '').trim(); return s && !/[.!?…]$/.test(s) ? s + '.' : s; };
+  const join = function (a, z) { return clipWords([dot(a), dot(z)].filter(Boolean).join(' '), 25); };
+  const desc = firstSentence(b.description);
+  const aud = b.audience.trim() ? L.forAudience + b.audience.trim() : '';
+  const problem = splitLines(b.problem)[0] || '';
+  const benefits = splitLines(b.benefit);
+  const notes = [];
+  if (!problem) notes.push('No customer problem was entered, so option A uses your description. Add the problem in Step 1 for a sharper hook.');
+  if (!benefits.length) notes.push('No benefit was entered, so option B uses your description. Add the benefit in Step 1 for a sharper hook.');
+  const items = [
+    { id: 'A', headline: capFirst(clipWords(problem || desc || b.productName, 12)), sub: join(desc, aud) },
+    { id: 'B', headline: capFirst(clipWords(benefits[0] || desc || b.productName, 12)), sub: join(aud, benefits[1] ? capFirst(benefits[1]) : desc) },
+    { id: 'C', headline: capFirst(clipWords(desc || b.productName, 12)), sub: join(aud, benefits[0] ? capFirst(benefits[0]) : '') }
+  ];
+  const rec = benefits.length ? 'B' : problem ? 'A' : 'C';
+  const read = AUDIENCE_READ[b.audienceLevel] || AUDIENCE_READ.mixed;
+  return {
+    items: items, recommend: rec, source: 'rules', model: '', stamp: '', notes: notes,
+    reason: rec === 'B' ? 'It leads with the result you entered, which is the easiest thing for a first-time reader to care about.'
+      : rec === 'A' ? 'It starts from the problem you entered, in your own words.' : 'It says plainly what the product is and does.',
+    entry: read[0], awareness: read[1]
+  };
+}
+
+/* With AI: the request sent to Gemini. The answer must be JSON. */
+function hookPrompt(p, avoid) {
+  const b = p.brief, c = p.content;
+  const v = function (x) { return String(x || '').trim() || 'Not provided'; };
+  const lang = b.language === 'id' ? 'Indonesian (Bahasa Indonesia)' : 'English';
+  const tone = c.tone === 'casual' ? 'casual and warm (for Indonesian use aku/kamu and everyday words)'
+    : c.tone === 'formal' ? 'formal and professional' : 'match the audience: warm and practical for parents and beginners, direct for professionals';
+  const out = [
+    'You are a senior conversion copywriter. Write THREE hero options (headline + subheadline) for a landing page. Work only from the brief below. Do not invent facts.',
+    '',
+    'BRIEF',
+    '- Product: ' + v(b.productName),
+    '- Category: ' + v(labelOf(CATEGORIES, b.category)),
+    '- What it is: ' + v(b.description),
+    '- Target audience: ' + v(b.audience),
+    '- How familiar the audience is with the topic: ' + v(labelOf(AUDIENCE_LEVELS, b.audienceLevel)),
+    '- Main problem: ' + v(b.problem),
+    '- What they already tried and why it fell short: ' + v(b.tried),
+    '- Desired result or main benefit: ' + v(b.benefit),
+    '- Page goal: ' + goalLabel(p),
+    '- Language of the copy: ' + lang,
+    '- Tone: ' + tone,
+    '- Extra notes: ' + v([c.brandNotes, c.notes].filter(function (x) { return String(x || '').trim(); }).join(' / ')),
+    '',
+    'METHOD',
+    '1. First decide the ENTRY LEVEL (the least experienced person in this audience) and the AWARENESS LEVEL (unaware, problem-aware, solution-aware or product-aware).',
+    '2. Write all three options for the entry-level person. Do not assume tools they used, attempts they made or terms they know, unless the brief says the whole audience did. If a problem angle only fits experienced people, rewrite it for the beginner.',
+    '3. The three options come from different angles: A = the problem (their situation in their own words), B = the result (what they can do or get), C = how it works (the simple mechanism or first step).',
+    '4. Headline and subheadline together must make clear, at a glance, what the product is, who it is for and what it does for them. The subheadline states plainly what it is and does.',
+    '5. No jargon in the headline or subheadline (for example database, deployment, API, UI, funnel) unless the brief shows the audience knows it.',
+    '6. Sound like one person talking to one reader. If you would not say it to a friend on WhatsApp, rewrite it. No stacked "Bukan X, tapi Y" lines, no slogan filler, no clickbait. Never hide what the product is for the sake of curiosity.',
+    '7. Headline: 12 words or fewer. Subheadline: 25 words or fewer.',
+    '8. No invented numbers, testimonials, guarantees, results or scarcity. No urgency unless the brief states a real deadline or limit.',
+    '9. Recommend ONE option and give a one-sentence reason (in English).'
+  ];
+  if (avoid && avoid.length) out.push('10. Do not repeat these earlier options: ' + avoid.join(' | '));
+  out.push('', 'Answer with JSON only, in exactly this shape:',
+    '{"entry_level":"...","awareness":"...","options":[{"angle":"problem","headline":"...","sub":"..."},{"angle":"result","headline":"...","sub":"..."},{"angle":"mechanism","headline":"...","sub":"..."}],"recommend":"A","reason":"..."}');
+  return out.join('\n');
+}
+
+function parseJsonLoose(text) {
+  let t = String(text || '').trim();
+  try { return JSON.parse(t); } catch (e) { /* try the next way */ }
+  t = t.replace(/^```[a-z]*\s*/i, '').replace(/```\s*$/, '').trim();
+  try { return JSON.parse(t); } catch (e) { /* try the next way */ }
+  const a = t.indexOf('{'), z = t.lastIndexOf('}');
+  if (a !== -1 && z > a) { try { return JSON.parse(t.slice(a, z + 1)); } catch (e) { /* give up */ } }
+  return null;
+}
+
+function normalizeAiHooks(data, model) {
+  if (!data || !Array.isArray(data.options) || data.options.length < 3) return null;
+  const ids = ['A', 'B', 'C'];
+  const flat = function (x, n) { return clip(String(x || '').replace(/\s+/g, ' '), n); };
+  const items = ids.map(function (id, i) {
+    const o = data.options[i] || {};
+    return { id: id, headline: flat(o.headline, 160), sub: flat(o.sub || o.subheadline, 300) };
+  });
+  if (items.some(function (it) { return !it.headline; })) return null;
+  const rec = String(data.recommend || '').toUpperCase();
+  return {
+    items: items, recommend: ids.indexOf(rec) !== -1 ? rec : 'B', reason: flat(data.reason, 240),
+    entry: flat(data.entry_level, 200), awareness: flat(data.awareness, 120), source: 'ai', model: model, stamp: '', notes: []
+  };
 }
 
 function skel(widths) {
@@ -1245,8 +1395,10 @@ function buildPrompt(p) {
   line('Target audience', b.audience);
   line('Main customer problem', b.problem, 'Not provided. Infer only a mild, general problem from the description. Add no statistics or dramatic claims.');
   line('Main benefit or desired outcome', b.benefit, 'Not provided. Derive benefits only from the description above.');
+  line('What they already tried, and why it fell short', b.tried, 'Not provided. Do not assume any earlier attempts.');
+  line('How familiar the audience is with the topic', labelOf(AUDIENCE_LEVELS, b.audienceLevel), 'Not specified. Assume the audience is new to the topic.');
   out.push('');
-  out.push('Before writing, work out these seven points privately and do not print them: (1) who exactly the reader is, (2) their main need or problem, (3) what the product is and includes, (4) the one or two benefits that matter most to them, (5) why this product deserves consideration, (6) what doubt would stop them buying, (7) what action you want after reading. Use only the facts above or reasonable inferences from them.');
+  out.push('Before writing, work out these eight points privately and do not print them: (1) who exactly the reader is, (2) their main need or problem, (3) what the product is and includes, (4) the one or two benefits that matter most to them, (5) why this product deserves consideration, (6) what doubt would stop them buying, (7) what action you want after reading, (8) who the least experienced buyer in this audience is. Write the hero for that person: no assumed experience, tools or jargon. Use only the facts above or reasonable inferences from them.');
 
   /* 2 */
   H('2. Conversion objective');
@@ -1309,10 +1461,19 @@ function buildPrompt(p) {
   out.push('- Prefer concrete benefits and details over abstract claims. Say what the reader can do, get or stop doing.');
   out.push('- State the value proposition in one plain sentence early, and show what differs from alternatives only when the brief gives you facts for it.');
   out.push('- Headline, subheadline, CTA and offer must support one another and tell the same story.');
+  out.push('- Order of persuasion across the page: the visitor first understands what this is and who it is for, then recognises their own problem, then feels the need, then understands exactly what they get and how it works, and only then meets the reason to act. Never put price pressure before the offer is understood.');
+  out.push('- Sound like one person talking to one reader, in one register for the whole page (headlines, price block, CTA and FAQ included). If you would not say a line to a friend on WhatsApp, rewrite it. Use a "Not X, but Y" line at most once, and no slogan filler.');
+  out.push('- Define any unavoidable jargon in one plain sentence the first time it appears, and keep it out of the hero.');
   out.push('- Each section must add a new argument or fact. Do not repeat the same message in new words in another section.');
   out.push('- Clarity beats hype. Avoid generic phrases that fit any product, for example ' + GENERIC_PHRASES + '. They are not banned if a specific context truly justifies them, but never use them as defaults.');
   out.push('- Handle the doubts a reader of this product would likely have (who it is for, what exactly they get, how access or delivery works, how to pay, what to do if unsure) using only facts from this brief. Where a fact is missing write a clearly marked placeholder such as [to be confirmed]; never guess.');
-  if (c.headline.trim()) out.push('- Headline idea from me: "' + c.headline.trim() + '". Keep its meaning and intent, but you may sharpen clarity and pull.');
+  const hook = activeHook(p);
+  if (hook && hook.id !== 'own') {
+    out.push('- Hero headline (picked by me from three options; use it word for word): "' + hook.headline + '"');
+    if (hook.sub) out.push('- Hero subheadline (use it word for word): "' + hook.sub + '"');
+    out.push('- Angle of the page: ' + hook.angle + '. This angle is the thread of the whole page: the problem section, the solution and the closing call to action must echo it. Fix only typos; do not rewrite the hook.');
+  }
+  else if (c.headline.trim()) out.push('- Headline idea from me: "' + c.headline.trim() + '". Keep its meaning and intent, but you may sharpen clarity and pull.');
   else out.push('- Hero headline: write several candidate headlines privately, score them for relevance, clarity, differentiation and pull, and keep the best one. It must state what this is and who it is for. Do not show the alternatives on the page.');
   out.push('- Never invent: testimonials, customer counts, ratings, prices, discounts, guarantees, certifications, results, scarcity, deadlines, bonuses or any business fact not stated here.');
   out.push('- Urgency or scarcity appears only when a real deadline or limit is stated in this brief.');
@@ -1580,9 +1741,11 @@ async function listGeminiModels(key, signal) {
   return ids;
 }
 
-async function callGemini(prompt, model, signal) {
+async function callGemini(prompt, model, signal, opts) {
   const url = GEMINI_BASE + 'models/' + encodeURIComponent(model) + ':generateContent';
-  const body = JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }] });
+  const payload = { contents: [{ role: 'user', parts: [{ text: prompt }] }] };
+  if (opts && opts.json) payload.generationConfig = { responseMimeType: 'application/json' };
+  const body = JSON.stringify(payload);
   const data = await geminiRequest(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body }, state.gemini.key, signal);
   if (data.promptFeedback && data.promptFeedback.blockReason) {
     throw new Error('Gemini blocked this prompt (' + data.promptFeedback.blockReason + '). Edit the prompt and try again.');
@@ -1789,6 +1952,208 @@ function downloadGenCode() {
   const a = el('a', { href: url, download: name + '.html' }); document.body.append(a); a.click(); a.remove();
   setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
   setGenStatus('Downloaded ' + name + '.html.', 'ok');
+}
+
+/* ---------- Step 5: hook picker ---------- */
+function setHookStatus(msg, kind) { const n = $('#hook-status'); n.textContent = msg; n.className = 'status status-' + (kind || 'info'); }
+function setHookBusy(on) { ['#btn-hooks', '#btn-hooks-rules'].forEach(function (s) { const b = $(s); if (b) b.disabled = on; }); }
+
+function applyAiModeToHooks() {
+  const p = state.current; if (!p) return;
+  const on = p.aiMode === 'gemini', has = p.hooks.items.length > 0;
+  $('#gkey-details-hook').hidden = !on;
+  $('#btn-hooks-rules').hidden = !on;
+  $('#btn-hooks').textContent = on ? (has ? 'Write 3 new hooks with AI' : 'Write 3 hooks with AI (Gemini)') : (has ? 'Draft 3 new hooks' : 'Draft 3 hooks from my brief');
+  const det = $('#gkey-details-hook'); if (on && !state.gemini.key && !det.dataset.touched) det.open = true;
+}
+
+function pickHook(id) {
+  const p = state.current; if (!p) return;
+  p.content.hookPick = id;
+  $$('.hook').forEach(function (n) { n.classList.toggle('is-selected', n.dataset.hook === id); });
+  $('#e-content-hookPick').hidden = true; $('#f-content-hookPick').removeAttribute('aria-invalid');
+  if (state.previewShown) renderPreviewPanel();
+  scheduleSave();
+}
+function onHookEdited(id) {
+  const p = state.current;
+  if (p && p.content.hookPick === id && state.previewShown) renderPreviewPanel();
+  scheduleSave();
+}
+
+function hookCard(p, it) {
+  const meta = HOOK_ANGLES[it.id];
+  const radio = el('input', { type: 'radio', name: 'hookPick', value: it.id, id: 'hook-pick-' + it.id });
+  radio.checked = p.content.hookPick === it.id;
+  radio.addEventListener('change', function () { if (radio.checked) pickHook(it.id); });
+  const hIn = el('input', { type: 'text', id: 'hook-h-' + it.id, autocomplete: 'off' });
+  const sIn = el('textarea', { id: 'hook-s-' + it.id, rows: '2' });
+  hIn.value = it.headline; sIn.value = it.sub;
+  const hCount = el('span', { class: 'hint' }), sCount = el('span', { class: 'hint' });
+  const upd = function () {
+    const a = wordCount(hIn.value), b = wordCount(sIn.value);
+    hCount.textContent = a + ' of 12 words'; hCount.className = 'hint' + (a > 12 ? ' is-over' : '');
+    sCount.textContent = b + ' of 25 words'; sCount.className = 'hint' + (b > 25 ? ' is-over' : '');
+  };
+  hIn.addEventListener('input', function () { it.headline = hIn.value; upd(); onHookEdited(it.id); });
+  sIn.addEventListener('input', function () { it.sub = sIn.value; upd(); onHookEdited(it.id); });
+  upd();
+  return el('div', { class: 'hook' + (radio.checked ? ' is-selected' : ''), 'data-hook': it.id },
+    el('label', { class: 'hook-head', for: 'hook-pick-' + it.id }, radio, el('span', null, meta.label),
+      p.hooks.recommend === it.id ? el('span', { class: 'chip' }, 'Recommended') : null,
+      el('span', { class: 'hook-angle-hint' }, meta.hint)),
+    el('div', { class: 'field' }, el('label', { for: 'hook-h-' + it.id }, 'Headline'), hIn, hCount),
+    el('div', { class: 'field' }, el('label', { for: 'hook-s-' + it.id }, 'Subheadline'), sIn, sCount));
+}
+
+function ownHookCard(p) {
+  const radio = el('input', { type: 'radio', name: 'hookPick', value: 'own', id: 'hook-pick-own' });
+  radio.checked = p.content.hookPick === 'own';
+  radio.addEventListener('change', function () { if (radio.checked) pickHook('own'); });
+  return el('div', { class: 'hook' + (radio.checked ? ' is-selected' : ''), 'data-hook': 'own' },
+    el('label', { class: 'hook-head', for: 'hook-pick-own' }, radio, el('span', null, 'Keep my own headline from Step 3')),
+    el('p', { class: 'hook-own-text' }, p.content.headline.trim()));
+}
+
+function renderHooks() {
+  const p = state.current; if (!p) return;
+  const h = p.hooks, box = $('#hook-list'), meta = $('#hook-meta');
+  box.textContent = ''; meta.textContent = '';
+  $('#hook-stale').hidden = !(h.items.length && h.stamp && h.stamp !== hookStamp(p));
+  if (h.items.length) {
+    if (h.entry || h.awareness) meta.append(el('p', null, el('strong', null, 'Audience check: '), 'least experienced buyer = ' + (h.entry || 'n/a') + '; awareness = ' + (h.awareness || 'n/a') + '.'));
+    if (h.recommend) meta.append(el('p', null, el('strong', null, 'My pick: ' + h.recommend + '. '), h.reason || ''));
+    (h.notes || []).forEach(function (t) { meta.append(el('p', { class: 'muted small' }, t)); });
+    meta.append(el('p', { class: 'muted small' }, h.source === 'ai' ? 'Written by ' + (h.model || 'Gemini') + ' from your brief. Edit any line.' : 'Drafted from your own words with fixed rules, nothing invented. Edit any line before you use it.'));
+  }
+  h.items.forEach(function (it) { box.append(hookCard(p, it)); });
+  if (p.content.headline.trim()) box.append(ownHookCard(p));
+  if (!box.children.length) box.append(el('p', { class: 'muted small' }, 'No hooks yet. Use the button above to create three options.'));
+}
+
+function setHooks(p, r) {
+  r.stamp = hookStamp(p);
+  p.hooks = r;
+  if (p.content.hookPick !== 'own') p.content.hookPick = '';
+  scheduleSave();
+  if (state.current === p) { renderHooks(); applyAiModeToHooks(); if (state.previewShown) renderPreviewPanel(); }
+}
+
+function runHooksRules() {
+  const p = state.current; if (!p || state.hookBusy) return;
+  if (!p.brief.description.trim() && !p.brief.productName.trim()) { setHookStatus('Add a product name and description in Step 1 first.', 'error'); return; }
+  setHooks(p, draftHooksRules(p));
+  setHookStatus('Drafted from your own words. Edit any line, then pick one.', 'ok');
+}
+
+async function runHooksAi() {
+  const p = state.current, g = state.gemini;
+  if (!p || state.hookBusy) return;
+  if (!g.key) {
+    setHookStatus('Add your Gemini API key below, or choose "Draft without AI".', 'error');
+    const d = $('#gkey-details-hook'); d.open = true;
+    const k = $('#gh-key'); if (k) k.focus();
+    return;
+  }
+  const model = state.settings.geminiModel;
+  const avoid = p.hooks.items.map(function (it) { return it.headline; }).filter(Boolean);
+  const controller = new AbortController(); let timedOut = false;
+  const timer = setTimeout(function () { timedOut = true; controller.abort(); }, 120000);
+  state.hookBusy = true; setHookBusy(true);
+  setHookStatus('Asking Gemini (' + model + ') for three hooks…', 'info');
+  try {
+    const r = await callGemini(hookPrompt(p, avoid), model, controller.signal, { json: true });
+    const res = normalizeAiHooks(parseJsonLoose(r.text), model);
+    if (!res) throw new Error('Gemini did not return three usable hooks. Try again, or choose "Draft without AI".');
+    setHooks(p, res);
+    setHookStatus('Done. Edit any line, then pick one.', 'ok');
+  } catch (e) {
+    if (e && e.name === 'AbortError') setHookStatus(timedOut ? 'Gemini took too long. Try again or choose a Flash model.' : 'Cancelled.', timedOut ? 'error' : 'info');
+    else setHookStatus(e.message, 'error');
+  }
+  clearTimeout(timer); state.hookBusy = false; setHookBusy(false);
+}
+
+/* ---------- Step 6: tailored prompt written by AI ---------- */
+function setTemplatePrompt(p, text) {
+  p.prompt = text; p.promptBase = text; p.promptEdited = false; p.promptSource = 'template'; p.aiBase = '';
+}
+
+function aiPromptRequest(template, p) {
+  const lynk = p.brief.platform === 'lynk';
+  return [
+    'You are a senior prompt engineer and conversion copywriter. Below is a TEMPLATE brief. It will be pasted into Claude (free plan) so Claude builds one landing page. Rewrite it into the final, tailored prompt for THIS product.',
+    '',
+    'Rules for your rewrite:',
+    '1. Output ONLY the finished prompt (markdown is fine). No introduction, no commentary, and do not wrap the whole answer in a code fence.',
+    '2. Keep the same twelve numbered sections and their order.',
+    '3. Keep every platform, technical, responsive, quality-check and output-format rule from the template exactly as written (sections 8, 10, 11 and 12)' + (lynk ? ', including every Lynk.id inline-CSS limit' : '') + '. Do not weaken or drop any of them.',
+    '4. Keep every "do not invent" rule. Use only facts that appear in the brief. Where a fact is missing, write [to be confirmed] instead of guessing.',
+    '5. Keep the Style DNA (sections 5 and 7) intact. You may add detail, never contradict it.',
+    '6. Use the hero headline and subheadline from the brief word for word. Make the problem, solution and closing sections echo the same angle.',
+    '7. Replace generic instruction text in sections 1 to 4 and 6 with direction written for this product: for every enabled section add a short "Copy direction" line listing the actual points to cover, drawn from the brief (audience, problem, what they tried, benefit, offer). Do not write the full page copy.',
+    '8. Write for the least experienced buyer in the audience. Keep jargon out of the hero and define unavoidable terms in one plain sentence.',
+    '9. Sound like one person talking to one reader, in one register for the whole page.',
+    '10. The prompt itself stays in English; the page copy language is the one named in the brief.',
+    '',
+    'TEMPLATE START',
+    template,
+    'TEMPLATE END'
+  ].join('\n');
+}
+function cleanAiPrompt(text) {
+  let t = String(text || '').trim();
+  const m = t.match(/^```[a-z]*\n([\s\S]*?)\n```$/i);
+  if (m) t = m[1].trim();
+  return t;
+}
+function setPromptBusy(on) {
+  const ta = $('#prompt-text'); if (ta) ta.readOnly = on;
+  ['#btn-regen', '#btn-use-template'].forEach(function (s) { const b = $(s); if (b) b.disabled = on; });
+}
+
+async function writePromptWithAI(auto) {
+  const p = state.current, g = state.gemini;
+  if (!p || p.aiMode !== 'gemini' || state.promptBusy) return;
+  const template = buildPrompt(p);
+  if (!g.key) {
+    setStatus(auto ? 'Add your Gemini API key below so AI can write a tailored prompt. The template version is shown meanwhile.' : 'Add your Gemini API key first.', auto ? 'info' : 'error');
+    const det = $('#gkey-details'); if (det) det.open = true;
+    return;
+  }
+  const model = state.settings.geminiModel;
+  const controller = new AbortController(); let timedOut = false;
+  const timer = setTimeout(function () { timedOut = true; controller.abort(); }, 180000);
+  state.promptBusy = true; setPromptBusy(true);
+  setStatus('Gemini (' + model + ') is writing a tailored prompt from your brief and hook. This can take up to a minute…', 'info');
+  try {
+    const r = await callGemini(aiPromptRequest(template, p), model, controller.signal);
+    if (r.finish === 'MAX_TOKENS') throw new Error('The AI answer was cut off at the length limit.');
+    const t = cleanAiPrompt(r.text);
+    if (t.length < template.length * 0.6 || !/^#/m.test(t) || (p.brief.platform === 'lynk' && !/inline/i.test(t))) throw new Error('The AI answer looks incomplete.');
+    p.prompt = t; p.promptBase = t; p.promptEdited = false; p.promptSource = 'ai'; p.aiBase = template;
+    state.aiSkipFor = '';
+    if (state.current === p) { $('#prompt-text').value = t; updatePromptStats(); $('#prompt-notice').hidden = true; }
+    scheduleSave();
+    setStatus('Prompt written by ' + model + ' from your brief and hook. Read it, edit if you like, then copy.', 'ok');
+  } catch (e) {
+    state.aiSkipFor = template;
+    const why = e && e.name === 'AbortError' ? (timedOut ? 'Gemini took too long.' : 'Cancelled.') : e.message;
+    setStatus(why + ' The template version is shown instead. Choose "Rewrite Prompt with AI" to try again.', 'error');
+  }
+  clearTimeout(timer); state.promptBusy = false; setPromptBusy(false);
+}
+
+function useTemplatePrompt() {
+  const p = state.current; if (!p || state.promptBusy) return;
+  const doIt = function () {
+    const fresh = buildPrompt(p); setTemplatePrompt(p, fresh); state.aiSkipFor = fresh;
+    $('#prompt-text').value = fresh; $('#prompt-notice').hidden = true; updatePromptStats(); scheduleSave();
+    setStatus('Template version restored.', 'ok');
+  };
+  if (p.promptEdited && p.prompt !== p.promptBase) {
+    openDialog({ title: 'Replace your edits?', message: 'Switching to the template version discards the changes you made in the text box.', okText: 'Use template', danger: true }).then(function (yes) { if (yes) doIt(); });
+  } else doIt();
 }
 
 /* ---------- toast + dialog ---------- */
@@ -2022,7 +2387,7 @@ function syncAiMode() {
 }
 function setAiMode(mode) {
   const p = state.current; if (!p || (mode !== 'none' && mode !== 'gemini')) return;
-  p.aiMode = mode; syncAiMode(); applyAiModeToStep6(); scheduleSave();
+  p.aiMode = mode; syncAiMode(); applyAiModeToStep6(); applyAiModeToHooks(); scheduleSave();
 }
 function applyAiModeToStep6() {
   const p = state.current; if (!p) return;
@@ -2031,7 +2396,9 @@ function applyAiModeToStep6() {
   const off = $('#ai-off-note'); if (off) off.hidden = on;
   const copy = $('#btn-copy'); if (copy) copy.className = 'btn' + (on ? '' : ' btn-primary');
   const h = $('#h-step-6-sub');
-  if (h) h.textContent = on ? 'With AI is on: generate the page with your own Gemini key below, or copy the prompt to use anywhere else.' : 'Built from your current project data. Edit anything, then copy it into Claude, ChatGPT or any other AI.';
+  const rg = $('#btn-regen'); if (rg) rg.textContent = on ? 'Rewrite Prompt with AI' : 'Regenerate Prompt';
+  const ut = $('#btn-use-template'); if (ut) ut.hidden = !on;
+  if (h) h.textContent = on ? 'With AI is on: Gemini writes a tailored prompt from your brief and the hook you picked. You can also build the page itself with your key below, or copy the prompt to use anywhere else.' : 'Built from your current project data. Edit anything, then copy it into Claude, ChatGPT or any other AI.';
   if (on) { const det = $('#gkey-details'); if (det && !state.gemini.key) det.open = true; }
 }
 
@@ -2095,6 +2462,9 @@ function validateStep(n) {
   }
   if (n === 4) {
     if (!p.sections.some(function (s) { return s.enabled; })) errs.push({ path: 'sections', msg: 'Switch on at least one section.' });
+  }
+  if (n === 5) {
+    if (!activeHook(p)) errs.push({ path: 'content.hookPick', msg: 'Pick one of the three hooks (or keep your own headline) before you generate the prompt.' });
   }
   return errs;
 }
@@ -2343,6 +2713,7 @@ function renderReview() {
     ['Sections', enabled.length ? enabled.join(' → ') : 'None'],
     ['Copy formula', formulaSummary(p)],
     ['Formula plan', formulaPlanText(p)],
+    ['Hero hook', (function () { const hk = activeHook(p); return hk ? hk.headline + (hk.angle ? ' (' + hk.angle + ' angle)' : '') : ''; })()],
     ['AI mode', p.aiMode === 'gemini' ? 'With AI (Gemini, your own key)' : 'Without AI (prompt only)'],
     ['Main CTA', (c.ctaLabel.trim() || 'Label not set') + (c.ctaUrl.trim() ? ' → ' + c.ctaUrl.trim() : ' (no URL)')]
   ];
@@ -2363,7 +2734,7 @@ function renderReview() {
   const missing = [];
   if (!b.problem.trim()) missing.push('Main customer problem');
   if (!b.benefit.trim()) missing.push('Main benefit');
-  if (!c.headline.trim()) missing.push('Headline idea (a draft is used in the preview)');
+  if (!activeHook(p) && !c.headline.trim()) missing.push('Hero hook (pick one in the section below)');
   if (!c.ctaLabel.trim()) missing.push('CTA label (a default is shown in the preview)');
   if (!c.ctaUrl.trim()) missing.push('CTA destination URL');
   if (on('offer') && !c.regularPrice.trim() && !c.promoPrice.trim()) missing.push('Price (offer section is on)');
@@ -2375,6 +2746,7 @@ function renderReview() {
 
   $('#preview-block').hidden = !state.previewShown;
   if (state.previewShown) renderPreviewPanel();
+  renderHooks(); applyAiModeToHooks();
 }
 function renderPreviewPanel() {
   const p = state.current, frame = $('#preview-frame');
@@ -2401,8 +2773,11 @@ function enterPrompt() {
   const p = state.current, ta = $('#prompt-text'), notice = $('#prompt-notice');
   notice.hidden = true; setStatus('', 'info');
   const fresh = buildPrompt(p);
-  if (!p.prompt || !p.promptEdited) { p.prompt = fresh; p.promptBase = fresh; p.promptEdited = false; }
-  else if (p.promptBase !== fresh) {
+  const basis = p.promptSource === 'ai' ? p.aiBase : p.promptBase;
+  const stale = basis !== fresh;
+  if (!p.prompt) setTemplatePrompt(p, fresh);
+  else if (!p.promptEdited && (stale || (p.aiMode !== 'gemini' && p.promptSource === 'ai'))) setTemplatePrompt(p, fresh);
+  else if (p.promptEdited && stale) {
     notice.textContent = 'Your project changed after this prompt was generated. Your edited prompt was kept. Choose Regenerate Prompt to rebuild it from the current project data (this replaces your edits).';
     notice.hidden = false;
   }
@@ -2412,11 +2787,13 @@ function enterPrompt() {
     note.textContent = 'Reminder: attach your reference screenshot (' + p.design.referenceImageName + ') to the Claude chat yourself. The prompt cannot carry the image.'; note.hidden = false;
   } else note.hidden = true;
   setGenStatus('', 'info'); applyAiModeToStep6(); syncKeyPanels(); renderGenResult();
+  if (p.aiMode === 'gemini' && !p.promptEdited && !(p.promptSource === 'ai' && p.aiBase === fresh) && state.aiSkipFor !== fresh) writePromptWithAI(true);
 }
 function regeneratePrompt() {
   const p = state.current;
   const doIt = function () {
-    const fresh = buildPrompt(p); p.prompt = fresh; p.promptBase = fresh; p.promptEdited = false;
+    if (p.aiMode === 'gemini') { state.aiSkipFor = ''; writePromptWithAI(false); return; }
+    const fresh = buildPrompt(p); setTemplatePrompt(p, fresh);
     $('#prompt-text').value = fresh; $('#prompt-notice').hidden = true; updatePromptStats(); scheduleSave();
     setStatus('Prompt regenerated from the current project data.', 'ok');
   };
@@ -2509,8 +2886,13 @@ function bindEvents() {
   $('#gkey-mount-brief').append(buildKeyPanel('gb'));
   $('#gkey-mount-settings').append(buildKeyPanel('gs'));
   $('#gkey-mount-studio').append(buildKeyPanel('gp'));
+  $('#gkey-mount-hook').append(buildKeyPanel('gh'));
   $('#gkey-details').addEventListener('toggle', function (e) { e.target.dataset.touched = '1'; });
   $('#btn-gen').addEventListener('click', runGemini);
+  $('#btn-hooks').addEventListener('click', function () { if (state.current && state.current.aiMode === 'gemini') runHooksAi(); else runHooksRules(); });
+  $('#btn-hooks-rules').addEventListener('click', runHooksRules);
+  $('#btn-use-template').addEventListener('click', useTemplatePrompt);
+  $('#gkey-details-hook').addEventListener('toggle', function (e) { e.target.dataset.touched = '1'; });
   $('#btn-gen-cancel').addEventListener('click', function () { if (state.gemini.controller) state.gemini.controller.abort(); });
   $('#gen-copy').addEventListener('click', copyGenCode);
   $('#gen-download').addEventListener('click', downloadGenCode);
@@ -2523,6 +2905,7 @@ function bindEvents() {
 function populateSelects() {
   fillSelect($('#f-brief-category'), CATEGORIES, 'Select a category (optional)');
   fillSelect($('#f-brief-goal'), GOALS, 'Select a goal');
+  fillSelect($('#f-brief-audienceLevel'), AUDIENCE_LEVELS, 'Not sure yet');
   const base = $('#f-design-baseStyleId'); base.textContent = '';
   base.append(el('option', { value: 'auto' }, 'Automatic (best rule-based match for my brief)'));
   STYLES.forEach(function (s) { base.append(el('option', { value: s.id }, s.name)); });

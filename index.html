@@ -68,10 +68,10 @@
             <li><strong>Product brief</strong><span>Describe what you sell and who it is for.</span></li>
             <li><strong>Design discovery</strong><span>Pick a style, use a reference, or get rule-based recommendations.</span></li>
             <li><strong>Page planner</strong><span>Choose and order the sections.</span></li>
-            <li><strong>Visual preview</strong><span>Check a mockup built from your own data.</span></li>
+            <li><strong>Preview and hero hook</strong><span>Check a mockup built from your own data and pick one of three hero hooks.</span></li>
             <li><strong>Prompt workspace</strong><span>Edit and copy a prompt for Lynk.id or a standard website.</span></li>
           </ol>
-          <p class="muted small">Recommendations and prompts come from fixed templates and rules applied to what you enter. AI is only called if you add your own Gemini API key and press Generate in the last step.</p>
+          <p class="muted small">Without AI, recommendations, hooks and prompts come from fixed templates and rules applied to what you enter. With AI and your own Gemini API key, Gemini writes the three hero hooks and a tailored prompt, and can build the page itself in the last step.</p>
         </div>
       </div>
     </section>
@@ -158,7 +158,7 @@
         <p class="muted small">Changes apply to new projects only. Existing projects keep their own choices.</p>
         <hr>
         <h2 class="h2">Gemini API (optional)</h2>
-        <p class="muted small">Add your own Google AI Studio API key to send the finished prompt to Gemini from Step 6 and preview the result. Without a key, the app works exactly as before: copy the prompt and paste it into Claude or any other AI.</p>
+        <p class="muted small">Add your own Google AI Studio API key so Gemini can write your hero hooks and a tailored prompt, and so you can send the prompt to Gemini from Step 6 and preview the result. Without a key, the app works exactly as before: copy the prompt and paste it into Claude or any other AI.</p>
         <div id="gkey-mount-settings"></div>
         <hr>
         <h2 class="h2">Local data</h2>
@@ -187,8 +187,8 @@
         <p class="muted">Tell the studio what you are promoting. Optional fields can stay empty; the generated prompt will tell Claude not to invent them.</p>
         <fieldset class="mode-switch mode-switch-2" id="ai-mode-box">
           <legend>How should the final page be made?</legend>
-          <label class="mode-opt"><input type="radio" name="aiMode" value="none"><span><strong>Without AI</strong><small>You get a ready prompt. Paste it into Claude, ChatGPT or any AI yourself. No key needed.</small></span></label>
-          <label class="mode-opt"><input type="radio" name="aiMode" value="gemini"><span><strong>With AI (Gemini)</strong><small>Use your own Google AI Studio key. The studio sends the prompt for you and shows the finished page.</small></span></label>
+          <label class="mode-opt"><input type="radio" name="aiMode" value="none"><span><strong>Without AI</strong><small>Hooks and prompt come from fixed templates built from your own words. Paste the prompt into Claude, ChatGPT or any AI yourself. No key needed.</small></span></label>
+          <label class="mode-opt"><input type="radio" name="aiMode" value="gemini"><span><strong>With AI (Gemini)</strong><small>Use your own Google AI Studio key. Gemini writes your 3 hero hooks and a tailored prompt, and can build the finished page for you.</small></span></label>
         </fieldset>
         <div id="ai-key-block" class="ai-key-block" hidden>
           <p class="small muted">Your key stays in this browser and goes only to Google. Test it now so Step 6 is ready.</p>
@@ -231,6 +231,16 @@
           <div class="field full">
             <label for="f-brief-problem">Main customer problem</label>
             <textarea id="f-brief-problem" data-bind="brief.problem" rows="3"></textarea>
+          </div>
+          <div class="field full">
+            <label for="f-brief-tried">What they already tried, and why it fell short</label>
+            <textarea id="f-brief-tried" data-bind="brief.tried" rows="2" placeholder="Optional. e.g. Watched free tutorials but still did not know where to start"></textarea>
+            <p class="hint">Helps the hooks and the prompt explain why this time is different. Leave empty if unknown; nothing is invented.</p>
+          </div>
+          <div class="field full">
+            <label for="f-brief-audienceLevel">How familiar is your audience with this topic?</label>
+            <select id="f-brief-audienceLevel" data-bind="brief.audienceLevel"></select>
+            <p class="hint">Your hero hooks are written for the least experienced person in your audience, so this matters.</p>
           </div>
           <div class="field full">
             <label for="f-brief-benefit">Main benefit or desired outcome</label>
@@ -415,6 +425,27 @@
           <div><h3 class="h3">Available assets</h3><ul id="assets-list" class="plain-list"></ul></div>
           <div><h3 class="h3">Missing optional information</h3><ul id="missing-list" class="plain-list"></ul></div>
         </div>
+        <section class="hook-block" aria-labelledby="h-hooks">
+          <h3 class="h3" id="h-hooks">Pick your hero hook</h3>
+          <p class="muted small">Three options for the first thing your visitor reads, each from a different angle. They are written for the least experienced person in your audience and say plainly what the product is. Pick one (you can edit the words); the rest of the page follows its angle.</p>
+          <div class="btn-row">
+            <button type="button" class="btn btn-primary" id="btn-hooks">Draft 3 hooks from my brief</button>
+            <button type="button" class="btn" id="btn-hooks-rules" hidden>Draft without AI</button>
+          </div>
+          <details class="gkey-details" id="gkey-details-hook" hidden>
+            <summary>API key and model</summary>
+            <div id="gkey-mount-hook"></div>
+          </details>
+          <p id="hook-status" class="status" role="status" aria-live="polite"></p>
+          <div id="hook-stale" class="banner banner-warn" role="status" hidden>Your brief changed after these hooks were made. Create them again so they match.</div>
+          <div id="hook-meta" class="hook-meta"></div>
+          <fieldset class="hook-set" id="f-content-hookPick" tabindex="-1">
+            <legend>Choose one</legend>
+            <div id="hook-list" class="hook-list"></div>
+          </fieldset>
+          <p class="field-error" id="e-content-hookPick" hidden></p>
+        </section>
+
         <div class="btn-row">
           <button type="button" class="btn btn-quiet" data-goto="1">Edit Brief</button>
           <button type="button" class="btn btn-quiet" data-goto="2">Edit Design</button>
@@ -448,6 +479,7 @@
         <div class="btn-row">
           <button type="button" class="btn btn-primary" id="btn-copy">Copy Prompt</button>
           <button type="button" class="btn" id="btn-regen">Regenerate Prompt</button>
+          <button type="button" class="btn" id="btn-use-template" hidden>Use template version</button>
           <button type="button" class="btn" id="btn-edit-prompt">Edit Prompt</button>
         </div>
         <p id="copy-status" class="status" role="status" aria-live="polite"></p>
